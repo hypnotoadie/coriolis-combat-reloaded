@@ -1,0 +1,60 @@
+{
+  "id": "coriolis-combat-reloaded",
+  "title": "Coriolis: Combat Reloaded",
+  "description": "Enhances the Coriolis combat system by replacing Armor Rating with Armor Penetration (AP) and Damage Reduction (DR).",
+  "version": "1.0.0",
+  "compatibility": {
+    "minimum": "10",
+    "verified": "11",
+    "maximum": "11"
+  },
+  "authors": [
+    {
+      "name": "Your Name",
+      "email": "your.email@example.com",
+      "url": "https://yourwebsite.com"
+    }
+  ],
+  "esmodules": [
+    "scripts/main.js"
+  ],
+  "styles": [
+    "styles/combat-reloaded.css"
+  ],
+  "packs": [],
+  "relationships": {
+    "systems": [
+      {
+        "id": "yzecoriolis",
+        "type": "system",
+        "compatibility": {
+          "minimum": "3.0.0"
+        }
+      }
+    ]
+  },
+  "socket": false,
+  "url": "https://github.com/yourusername/coriolis-combat-reloaded",
+  "manifest": "https://raw.githubusercontent.com/yourusername/coriolis-combat-reloaded/main/module.json",
+  "download": "https://github.com/yourusername/coriolis-combat-reloaded/archive/v1.0.0.zip",
+  "license": "LICENSE.txt",
+  "readme": "README.md",
+  "media": [
+    {
+      "type": "icon",
+      "url": "https://raw.githubusercontent.com/yourusername/coriolis-combat-reloaded/main/artwork/logo.png"
+    }
+  ],
+  "languages": [
+    {
+      "lang": "en",
+      "name": "English",
+      "path": "languages/en.json"
+    },
+    {
+      "lang": "sv",
+      "name": "Svenska",
+      "path": "languages/sv.json"
+    }
+  ]
+}

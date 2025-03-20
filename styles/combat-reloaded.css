@@ -1,0 +1,70 @@
+/* combat-reloaded.css */
+
+/* Common styling for AP and DR elements */
+.ap-value, .dr-value {
+    font-weight: bold;
+    padding: 0 3px;
+    border-radius: 3px;
+    display: inline-block;
+    text-align: center;
+    min-width: 24px;
+  }
+  
+  /* Armor Penetration styling */
+  .ap-value {
+    color: #ffdddd;
+    background-color: rgba(180, 30, 30, 0.7);
+    border: 1px solid #990000;
+  }
+  
+  /* Damage Reduction styling */
+  .dr-value {
+    color: #ddffdd;
+    background-color: rgba(30, 130, 30, 0.7);
+    border: 1px solid #006600;
+  }
+  
+  /* Add proper spacing in the weapon item rows */
+  .gear-list .gear.item .ap-column {
+    flex: 0 0 40px;
+    text-align: center;
+  }
+  
+  /* Add proper spacing in the armor item rows */
+  .gear-list .gear.item .dr-column {
+    flex: 0 0 40px;
+    text-align: center;
+  }
+  
+  /* Combat roll modifications in chat */
+  .dice-roll .combat-stats {
+    margin: 5px 0;
+    padding: 5px;
+    border: 1px solid #4b4a44;
+    border-radius: 5px;
+    background: rgba(0, 0, 0, 0.1);
+  }
+  
+  .combat-stats .ap-dr-row {
+    display: flex;
+    justify-content: space-between;
+  }
+  
+  /* For the comparison of AP vs DR in combat results */
+  .penetrating-damage {
+    color: #ff6666;
+  }
+  
+  .reduced-damage {
+    color: #66ff66;
+  }
+  
+  /* Weapon sheet additions */
+  .weapon-sheet .ap-field {
+    margin-top: 5px;
+  }
+  
+  /* Armor sheet modifications */
+  .armor-sheet .dr-field {
+    margin-top: 5px;
+  }

@@ -1,0 +1,34 @@
+{
+    "coriolis-combat-reloaded": {
+      "settings": {
+        "enableCombatReloaded": {
+          "name": "Enable Combat Reloaded",
+          "hint": "Replaces the standard Armor Rating with Armor Penetration and Damage Reduction mechanics"
+        }
+      },
+      "labels": {
+        "armorPenetration": "Armor Penetration",
+        "ap": "AP",
+        "damageReduction": "Damage Reduction",
+        "dr": "DR"
+      },
+      "messages": {
+        "penetratingDamage": "Penetrating Damage",
+        "reducedDamage": "Reduced Damage",
+        "moduleActive": "Coriolis: Combat Reloaded is active"
+      },
+      "dialogs": {
+        "confirm": "Confirm",
+        "cancel": "Cancel",
+        "applyChanges": "Apply Changes"
+      },
+      "tooltips": {
+        "armorPenetration": "Reduces target's Damage Reduction",
+        "damageReduction": "Absorbs incoming damage"
+      }
+    },
+    "YZECORIOLIS": {
+      "ArmorPenetration": "Armor Penetration",
+      "DamageReduction": "Damage Reduction"
+    }
+  }
