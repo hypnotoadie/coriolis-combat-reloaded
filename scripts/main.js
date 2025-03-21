@@ -188,6 +188,40 @@ function modifyArmorSection(app, html, data) {
     });
   }
 
+  // Function to modify weapon section to show AP
+function modifyWeaponSection(app, html, data) {
+  // Change the Weapon header to include AP if needed
+  const weaponHeader = html.find('.gear-category-header:contains("Weapon")');
+  if (weaponHeader.length) {
+    // Add a column for AP in the header if it doesn't exist
+    if (!weaponHeader.find('.ap-column').length) {
+      // First find the damage column to insert AP after it
+      const damageColumn = weaponHeader.find('.damage-column');
+      if (damageColumn.length) {
+        $(`<div class="ap-column">${game.i18n.localize("coriolis-combat-reloaded.labels.ap")}</div>`)
+          .insertAfter(damageColumn);
+      }
+    }
+  }
+  
+  // Update each weapon item to show AP
+  html.find('.gear.item').each((i, el) => {
+    const itemId = el.dataset.itemId;
+    if (!itemId) return;
+    
+    const item = app.actor.items.get(itemId);
+    if (item?.type === "weapon") {
+      // Find where the damage is displayed to add AP after it
+      const damageElement = $(el).find('.damage-column');
+      if (damageElement.length && !$(el).find('.ap-column').length) {
+        const apValue = item.system.armorPenetration || 0;
+        $(`<div class="ap-column"><span class="ap-value">${apValue}</span></div>`)
+          .insertAfter(damageElement);
+      }
+    }
+  });
+}
+
 // Function to modify the weapon item sheet
 function modifyWeaponSheetDisplay(app, html, data) {
     // Only proceed if this is a weapon
