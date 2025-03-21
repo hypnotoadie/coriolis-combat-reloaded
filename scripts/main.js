@@ -42,6 +42,20 @@ Hooks.on("renderyzecoriolisActorSheet", (app, html, data) => {
   modifyWeaponSection(app, html, data);
 });
 
+// Actor Sheet Changes for DR
+Hooks.on("renderyzecoriolisActorSheet", (app, html, data) => {
+  if (!game.settings.get(MODULE_ID, "enableCombatReloaded")) return;
+  
+  // Modify the armor section in character sheets
+  modifyArmorSection(app, html, data);
+  
+  // Modify the weapon section to include AP
+  modifyWeaponSection(app, html, data);
+  
+  // Add manual DR input to the character attributes section
+  addManualDRToActorSheet(app, html, data);
+});
+
 // Hook into the item sheet rendering
 Hooks.on("renderyzecoriolisItemSheet", (app, html, data) => {
   if (!game.settings.get(MODULE_ID, "enableCombatReloaded")) return;
@@ -57,13 +71,55 @@ Hooks.on("renderyzecoriolisItemSheet", (app, html, data) => {
   }
 });
 
-// Hook into chat message creation for modifying roll results
+// Combined renderChatMessage hook
 Hooks.on("renderChatMessage", (message, html, data) => {
   if (!game.settings.get(MODULE_ID, "enableCombatReloaded")) return;
   
-  // Modify damage and armor calculations in the chat results
+  // Combat Roll Messages
   modifyCombatRollMessage(message, html, data);
+  
+  // New code for item cards
+  // Check if this is an item card
+  const itemId = html.find(".item-card").data("itemId");
+  if (itemId) {
+    // Find the related actor and item
+    const actor = game.actors.get(html.find(".item-card").data("actorId"));
+    if (!actor) return;
+    
+    const item = actor.items.get(itemId);
+    if (!item) return;
+    
+    // Modify weapon cards to display AP
+    if (item.type === "weapon") {
+      modifyWeaponChatCard(item, html);
+    }
+    
+    // Modify armor cards to display DR
+    if (item.type === "armor") {
+      modifyArmorChatCard(item, html);
+    }
+  }
 });
+
+// Actor Prep
+Hooks.on("preUpdateActor", (actor, updateData, options, userId) => {
+  if (!game.settings.get(MODULE_ID, "enableCombatReloaded")) return;
+  
+  // If we're updating system data and there's no DR value set
+  if (updateData.system && !hasProperty(updateData.system, "attributes.damageReduction")) {
+    // Calculate DR from equipped armor
+    const calculatedDR = calculateActorDR(actor);
+    
+    // If we have a manual override, use that instead
+    const manualDR = actor.system.attributes?.manualDROverride;
+    const finalDR = (manualDR !== undefined && manualDR !== null) ? manualDR : calculatedDR;
+    
+    // Set the DR attribute
+    setProperty(updateData.system, "attributes.damageReduction", finalDR);
+  }
+});
+
+
 
 // Function to modify how armor works in combat rolls
 function patchCoriolisRollEvaluation() {
@@ -191,6 +247,79 @@ function modifyArmorSheetDisplay(app, html, data) {
   }
 }
 
+// Function to add manual DR input to character sheet
+function addManualDRToActorSheet(app, html, data) {
+  // Find a good place to insert our DR field - typically in attributes
+  const attributesSection = html.find('.attributes-header');
+  if (!attributesSection.length) return;
+  
+  // Get current values
+  const actor = app.actor;
+  const calculatedDR = calculateActorDR(actor);
+  const manualDR = actor.system.attributes?.manualDROverride;
+  const finalDR = (manualDR !== undefined && manualDR !== null) ? manualDR : calculatedDR;
+  
+  // Create DR input field
+  const drField = `
+    <div class="attribute flexrow">
+      <label class="attribute-label">
+        ${game.i18n.localize("coriolis-combat-reloaded.labels.damageReduction")}
+        <i class="fas fa-shield-alt" data-tooltip="${game.i18n.localize("coriolis-combat-reloaded.tooltips.damageReduction")}"></i>
+      </label>
+      <div class="attribute-value flexrow">
+        <input type="number" 
+               name="system.attributes.manualDROverride" 
+               value="${manualDR !== undefined ? manualDR : ''}" 
+               placeholder="${calculatedDR}"
+               data-dtype="Number"
+               title="${game.i18n.localize("coriolis-combat-reloaded.tooltips.damageReduction")}" />
+      </div>
+      <div class="attribute-footer">
+        <span class="attribute-footer-value">${game.i18n.localize("coriolis-combat-reloaded.labels.dr")}</span>
+      </div>
+    </div>
+  `;
+  
+  // Insert the DR field into the attributes section
+  attributesSection.after(drField);
+  
+  // Add tooltip functionality if needed
+  html.find('[data-tooltip]').tooltipster({
+    theme: 'tooltipster-fallback',
+    position: 'bottom',
+    arrow: false
+  });
+}
+
+// Function to calculate DR from equipped armor
+function calculateActorDR(actor) {
+  let totalDR = 0;
+  
+  // Find all equipped armor items
+  const equippedArmor = actor.items.filter(item => 
+    item.type === "armor" && 
+    item.system.equipped === true
+  );
+  
+  // Sum up all DR values from equipped armor
+  for (const armor of equippedArmor) {
+    const armorDR = armor.system.damageReduction || 0;
+    totalDR += armorDR;
+  }
+  
+  return totalDR;
+}
+
+// Extend actor preparation to include DR calculations
+Hooks.on("preCreateActor", (document, data, options, userId) => {
+  if (!game.settings.get(MODULE_ID, "enableCombatReloaded")) return;
+  
+  // Initialize DR properties if they don't exist
+  if (!hasProperty(data, "system.attributes.damageReduction")) {
+    document.updateSource({"system.attributes.damageReduction": 0});
+  }
+});
+
 // Function to modify chat messages for combat rolls - simplified to just show AP values
 function modifyCombatRollMessage(message, html, data) {
     // Check if this is a weapon roll
@@ -223,3 +352,47 @@ function modifyCombatRollMessage(message, html, data) {
     `);
     apRow.insertAfter(damageRow);
   }
+
+  // New functions for item cards
+function modifyWeaponChatCard(weapon, html) {
+  // Add AP after damage
+  const damageElement = html.find(".card-damage");
+  if (!damageElement.length) return;
+  
+  // Get the AP value
+  const armorPenetration = weapon.system.armorPenetration || 0;
+  
+  // Create AP element
+  const apElement = `
+    <div class="card-ap">
+      <span class="label">${game.i18n.localize("coriolis-combat-reloaded.labels.armorPenetration")}:</span>
+      <span class="value">${armorPenetration}</span>
+    </div>
+  `;
+  
+  // Insert after damage
+  damageElement.after(apElement);
+}
+
+function modifyArmorChatCard(armor, html) {
+  // Find where to add the DR info - typically in the card-attributes section
+  const attributesElement = html.find(".card-attributes");
+  if (!attributesElement.length) return;
+  
+  // Get the DR value
+  const damageReduction = armor.system.damageReduction || 0;
+  
+  // Create DR element
+  const drElement = `
+    <div class="card-dr">
+      <span class="label">${game.i18n.localize("coriolis-combat-reloaded.labels.damageReduction")}:</span>
+      <span class="value">${damageReduction}</span>
+    </div>
+  `;
+  
+  // Insert into attributes
+  attributesElement.append(drElement);
+  
+  // Remove the original Armor Rating if it exists
+  html.find(".card-armor-rating").remove();
+}
