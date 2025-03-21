@@ -136,7 +136,22 @@ function extendWeaponClass() {
   
   // Create a preparation hook for weapon items
   Hooks.on("preCreateItem", (document, data, options, userId) => {
-    if (data.type === "weapon" && !data.system.armorPenetration) {
+    // Only update if the document exists and it's a weapon
+    if (!document || data.type !== "weapon") return;
+    
+    // Check if this item is being added to an actor
+    // Only proceed if the actor exists to prevent null reference errors
+    const actor = document.parent;
+    if (!actor) {
+      // For items not directly linked to an actor, still add the AP property
+      if (!data.system?.armorPenetration) {
+        document.updateSource({"system.armorPenetration": 0});
+      }
+      return;
+    }
+    
+    // For items linked to an actor, safely update
+    if (!data.system?.armorPenetration) {
       document.updateSource({"system.armorPenetration": 0});
     }
   });
@@ -149,8 +164,26 @@ function extendArmorClass() {
   
   // Create a preparation hook for armor items
   Hooks.on("preCreateItem", (document, data, options, userId) => {
-    if (data.type === "armor" && !data.system.damageReduction) {
-      // Convert old armorRating to damageReduction if present
+    // Only update if the document exists and it's armor
+    if (!document || data.type !== "armor") return;
+    
+    // Check if this item is being added to an actor
+    // Only proceed if the actor exists to prevent null reference errors
+    const actor = document.parent;
+    if (!actor) {
+      // For items not directly linked to an actor, still convert AR to DR
+      if (!data.system?.damageReduction) {
+        const armorRating = data.system?.armorRating || 0;
+        document.updateSource({
+          "system.damageReduction": armorRating,
+          "system.-=armorRating": null  // Remove the old property
+        });
+      }
+      return;
+    }
+    
+    // For items linked to an actor, safely update
+    if (!data.system?.damageReduction) {
       const armorRating = data.system?.armorRating || 0;
       document.updateSource({
         "system.damageReduction": armorRating,
@@ -159,34 +192,6 @@ function extendArmorClass() {
     }
   });
 }
-
-// Function to modify armor section to show DR instead of Armor Rating
-function modifyArmorSection(app, html, data) {
-    // Change the Armor Rating header to Damage Reduction
-    const armorHeader = html.find('.gear-category-header:contains("Armor")');
-    if (armorHeader.length) {
-      const armorRatingHeader = armorHeader.find('.gear-category-name:contains("Armor Rating")');
-      if (armorRatingHeader.length) {
-        armorRatingHeader.text(game.i18n.localize("coriolis-combat-reloaded.labels.dr"));
-      }
-    }
-    
-    // Update each armor item to show DR instead of Armor Rating
-    html.find('.gear.item').each((i, el) => {
-      const itemId = el.dataset.itemId;
-      if (!itemId) return;
-      
-      const item = app.actor.items.get(itemId);
-      if (item?.type === "armor") {
-        // Find where the armor rating is displayed
-        const rowData = $(el).find('.gear-row-data:first');
-        if (rowData.length) {
-          const drValue = item.system.damageReduction || 0;
-          rowData.html(`<span class="dr-value">${drValue}</span>`);
-        }
-      }
-    });
-  }
 
   // Function to modify weapon section to show AP
 function modifyWeaponSection(app, html, data) {
@@ -224,24 +229,25 @@ function modifyWeaponSection(app, html, data) {
 
 // Function to modify the weapon item sheet
 function modifyWeaponSheetDisplay(app, html, data) {
-    // Only proceed if this is a weapon
-    if (app.item.type !== "weapon") return;
-    
-    // Find the damage input field
-    const damageField = html.find('.resource-label:contains("Damage")').closest('.resource');
-    
-    // Add AP field after damage if it doesn't exist
-    if (damageField.length && !html.find('.resource-label:contains("Armor Penetration")').length) {
-      const apValue = app.item.system.armorPenetration || 0;
-      const apField = `
-        <div class="resource numeric-input flexrow ap-field">
-          <label class="resource-label">${game.i18n.localize("YZECORIOLIS.ArmorPenetration")}</label>
-          <input type="number" min="0" name="system.armorPenetration" value="${apValue}" data-dtype="Number" />
-        </div>
-      `;
-      $(apField).insertAfter(damageField);
-    }
+  // Only proceed if this is a weapon
+  if (app.item.type !== "weapon") return;
+  
+  // Find the damage input field
+  const damageField = html.find('.resource-label:contains("Damage")').closest('.resource');
+  
+  // Add AP field after damage if it doesn't exist
+  if (damageField.length && !html.find('.resource-label:contains("Armor Penetration")').length) {
+    const apValue = app.item.system.armorPenetration || 0;
+    const apField = `
+      <div class="resource numeric-input flexrow ap-field">
+        <label class="resource-label">${game.i18n.localize("YZECORIOLIS.ArmorPenetration")}</label>
+        <input type="number" min="0" name="system.armorPenetration" value="${apValue}" data-dtype="Number" />
+      </div>
+    `;
+    $(apField).insertAfter(damageField);
   }
+}
+
 
 // Function to modify the armor item sheet
 function modifyArmorSheetDisplay(app, html, data) {
@@ -299,6 +305,7 @@ function addManualDRToActorSheet(app, html, data) {
       </div>
     </li>
   `;
+  
   
   // Insert the DR entry - position it after Radiation but before Experience
   const radiationEntry = statsSection.find('.stat-label:contains("Radiation")').closest('.entry');
@@ -372,7 +379,7 @@ function modifyCombatRollMessage(message, html, data) {
     apRow.insertAfter(damageRow);
   }
 
-  // New functions for item cards
+   // New functions for item cards
 function modifyWeaponChatCard(weapon, html) {
   // Add AP after damage
   const damageElement = html.find(".card-damage");
