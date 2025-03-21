@@ -31,16 +31,7 @@ Hooks.once("init", () => {
   }
 });
 
-// Hook into the rendering of character sheets
-Hooks.on("renderyzecoriolisActorSheet", (app, html, data) => {
-  if (!game.settings.get(MODULE_ID, "enableCombatReloaded")) return;
-  
-  // Modify the armor section in character sheets
-  modifyArmorSection(app, html, data);
-  
-  // Modify the weapon section to include AP
-  modifyWeaponSection(app, html, data);
-});
+
 
 // Actor Sheet Changes for DR
 Hooks.on("renderyzecoriolisActorSheet", (app, html, data) => {
