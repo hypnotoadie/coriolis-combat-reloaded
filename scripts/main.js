@@ -39,6 +39,23 @@ Hooks.once("init", () => {
     
     // Extend item classes for armor to handle DR
     extendArmorClass();
+    
+    // Register the DR attributes properly - this is important to fix the display issues
+    // This is a simple way to handle it assuming the system allows this approach
+    // If this doesn't work well, we would need to investigate the system's attribute registration methods
+    if (game.system.id === "yzecoriolis") {
+      try {
+        // Define damageReduction as a numeric attribute, not an object with value property
+        CONFIG.YZECORIOLIS = CONFIG.YZECORIOLIS || {};
+        CONFIG.YZECORIOLIS.attributes = CONFIG.YZECORIOLIS.attributes || {};
+        CONFIG.YZECORIOLIS.attributes.damageReduction = {
+          label: "Damage Reduction",
+          abbr: "DR"
+        };
+      } catch (e) {
+        console.error("coriolis-combat-reloaded | Error registering DR attribute:", e);
+      }
+    }
   }
 });
 
@@ -120,11 +137,18 @@ Hooks.on("renderChatMessage", (message, html, data) => {
 });
 
 // Actor Prep
+// Update how we set the damageReduction property to avoid the "in" operator error
 Hooks.on("preUpdateActor", (actor, updateData, options, userId) => {
   if (!game.settings.get(MODULE_ID, "enableCombatReloaded")) return;
   
+  // Check if we're updating the manualDROverride value
+  if (hasProperty(updateData, "system.attributes.manualDROverride")) {
+    // This is a direct override, so don't calculate anything
+    return;
+  }
+  
   // If we're updating system data and there's no DR value set
-  if (updateData.system && !hasProperty(updateData.system, "attributes.damageReduction")) {
+  if (updateData.system && !hasProperty(updateData, "system.attributes.damageReduction")) {
     // Calculate DR from equipped armor
     const calculatedDR = calculateActorDR(actor);
     
@@ -132,8 +156,10 @@ Hooks.on("preUpdateActor", (actor, updateData, options, userId) => {
     const manualDR = actor.system.attributes?.manualDROverride;
     const finalDR = (manualDR !== undefined && manualDR !== null) ? manualDR : calculatedDR;
     
-    // Set the DR attribute
-    setProperty(updateData.system, "attributes.damageReduction", finalDR);
+    // Set the DR attribute - IMPORTANT: Set it directly, not as system.attributes.damageReduction.value
+    updateData.system = updateData.system || {};
+    updateData.system.attributes = updateData.system.attributes || {};
+    updateData.system.attributes.damageReduction = finalDR;
   }
 });
 
@@ -338,12 +364,15 @@ function modifyArmorSheetDisplay(app, html, data) {
 }
 
 // Function to add manual DR input to character sheet
+// updated the data structure a bit
 function addManualDRToActorSheet(app, html, data) {
   console.log("coriolis-combat-reloaded | Adding manual DR to actor sheet");
   
   // Get current values
   const actor = app.actor;
   const calculatedDR = calculateActorDR(actor);
+  
+  // Important change: access manualDROverride directly, not as a complex object
   const manualDR = actor.system.attributes?.manualDROverride;
   const finalDR = (manualDR !== undefined && manualDR !== null) ? manualDR : calculatedDR;
   
@@ -375,7 +404,13 @@ function addManualDRToActorSheet(app, html, data) {
     // If can't find Radiation, just append to the end
     statsSection.append(drEntry);
   }
+  
+  // Remove the extra DR attributes from the attributes list
+  // This is the key change to fix the empty attribute boxes
+  html.find('.attr-block.bg-damageReduction').closest('li').remove();
+  html.find('.attr-block.bg-manualDROverride').closest('li').remove();
 }
+
 
 // Function to calculate DR from equipped armor
 function calculateActorDR(actor) {
@@ -400,7 +435,7 @@ function calculateActorDR(actor) {
 Hooks.on("preCreateActor", (document, data, options, userId) => {
   if (!game.settings.get(MODULE_ID, "enableCombatReloaded")) return;
   
-  // Initialize DR properties if they don't exist
+  // Initialize DR properties if they don't exist - set directly not as nested value
   if (!hasProperty(data, "system.attributes.damageReduction")) {
     document.updateSource({"system.attributes.damageReduction": 0});
   }
