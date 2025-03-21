@@ -240,46 +240,40 @@ function modifyArmorSheetDisplay(app, html, data) {
 
 // Function to add manual DR input to character sheet
 function addManualDRToActorSheet(app, html, data) {
-  // Find a good place to insert our DR field - typically in attributes
-  const attributesSection = html.find('.attributes-header');
-  if (!attributesSection.length) return;
-  
   // Get current values
   const actor = app.actor;
   const calculatedDR = calculateActorDR(actor);
   const manualDR = actor.system.attributes?.manualDROverride;
   const finalDR = (manualDR !== undefined && manualDR !== null) ? manualDR : calculatedDR;
   
-  // Create DR input field
-  const drField = `
-    <div class="attribute flexrow">
-      <label class="attribute-label">
-        ${game.i18n.localize("coriolis-combat-reloaded.labels.damageReduction")}
-        <i class="fas fa-shield-alt" data-tooltip="${game.i18n.localize("coriolis-combat-reloaded.tooltips.damageReduction")}"></i>
-      </label>
-      <div class="attribute-value flexrow">
-        <input type="number" 
+  // Find the always-visible-stats section
+  const statsSection = html.find('.always-visible-stats .perma-stats-list');
+  if (!statsSection.length) return;
+  
+  // Create the DR entry
+  const drEntry = `
+    <li class="entry flexrow">
+      <div class="stat-label">${game.i18n.localize("coriolis-combat-reloaded.labels.damageReduction")}</div>
+      <div class="number">
+        <input class="input-value dr-value" 
+               type="number" 
                name="system.attributes.manualDROverride" 
                value="${manualDR !== undefined ? manualDR : ''}" 
-               placeholder="${calculatedDR}"
+               placeholder="${calculatedDR}" 
                data-dtype="Number"
                title="${game.i18n.localize("coriolis-combat-reloaded.tooltips.damageReduction")}" />
       </div>
-      <div class="attribute-footer">
-        <span class="attribute-footer-value">${game.i18n.localize("coriolis-combat-reloaded.labels.dr")}</span>
-      </div>
-    </div>
+    </li>
   `;
   
-  // Insert the DR field into the attributes section
-  attributesSection.after(drField);
-  
-  // Add tooltip functionality if needed
-  html.find('[data-tooltip]').tooltipster({
-    theme: 'tooltipster-fallback',
-    position: 'bottom',
-    arrow: false
-  });
+  // Insert the DR entry - position it after Radiation but before Experience
+  const radiationEntry = statsSection.find('.stat-label:contains("Radiation")').closest('.entry');
+  if (radiationEntry.length) {
+    $(drEntry).insertAfter(radiationEntry);
+  } else {
+    // If can't find Radiation, just append to the end
+    statsSection.append(drEntry);
+  }
 }
 
 // Function to calculate DR from equipped armor

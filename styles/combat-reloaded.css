@@ -85,3 +85,23 @@
   .card-ap .value, .card-dr .value {
     flex: 1;
   }
+
+  /* Style for DR in always-visible stats */
+.always-visible-stats .dr-value {
+  font-weight: bold;
+  background-color: rgba(30, 130, 30, 0.2);
+  border: 1px solid #006600;
+  border-radius: 3px;
+  text-align: center;
+}
+
+/* Hover effect */
+.always-visible-stats .dr-value:hover {
+  background-color: rgba(30, 130, 30, 0.3);
+}
+
+/* Focus effect */
+.always-visible-stats .dr-value:focus {
+  box-shadow: 0 0 5px rgba(30, 130, 30, 0.7);
+  outline: none;
+}
