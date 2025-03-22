@@ -123,17 +123,18 @@ Hooks.on("renderChatMessage", (message, html, data) => {
 Hooks.on("preUpdateActor", (actor, updateData, options, userId) => {
   if (!game.settings.get(MODULE_ID, "enableCombatReloaded")) return;
   
-  // If we're updating system data and there's no DR value set
-  if (updateData.system && !hasProperty(updateData.system, "attributes.damageReduction")) {
+  // If we're manually updating damageReduction, don't interfere
+  if (hasProperty(updateData, "system.attributes.damageReduction")) {
+    return;
+  }
+  
+  // If we're updating the actor and the DR needs to be calculated
+  if (updateData.system || updateData.items) {
     // Calculate DR from equipped armor
     const calculatedDR = calculateActorDR(actor);
-    const manualDR = actor.system.attributes?.manualDROverride;
-    
-    // If manual override exists, use it, otherwise use calculated value
-    const finalDR = (manualDR !== undefined && manualDR !== null) ? manualDR : calculatedDR;
     
     // Set the DR attribute
-    setProperty(updateData.system, "attributes.damageReduction", finalDR);
+    setProperty(updateData, "system.attributes.damageReduction", calculatedDR);
   }
 });
 
@@ -399,7 +400,9 @@ function addManualDRToActorSheet(app, html, data) {
   // Get current values
   const actor = app.actor;
   const calculatedDR = calculateActorDR(actor);
-  const manualDR = actor.system.attributes?.manualDROverride;
+  
+  // Get the current DR value
+  const currentDR = actor.system.attributes?.damageReduction || 0;
   
   // Find the always-visible-stats section
   const statsSection = html.find('.always-visible-stats .perma-stats-list');
@@ -411,11 +414,11 @@ function addManualDRToActorSheet(app, html, data) {
       <div class="stat-label">${game.i18n.localize("coriolis-combat-reloaded.labels.damageReduction")}</div>
       <div class="number">
         <input class="input-value dr-value" 
-               type="text" 
-               name="system.attributes.manualDROverride" 
-               value="${manualDR !== undefined ? manualDR : ''}" 
-               placeholder="${calculatedDR}" 
-               data-dtype="Number" />
+               type="number" 
+               name="system.attributes.damageReduction" 
+               value="${currentDR}" 
+               data-dtype="Number"
+               title="${game.i18n.localize("coriolis-combat-reloaded.tooltips.damageReduction")}" />
       </div>
     </li>
   `;
@@ -454,10 +457,8 @@ function calculateActorDR(actor) {
 Hooks.on("preCreateActor", (document, data, options, userId) => {
   if (!game.settings.get(MODULE_ID, "enableCombatReloaded")) return;
   
-  // Initialize DR properties if they don't exist
-  if (!hasProperty(data, "system.attributes.damageReduction")) {
-    document.updateSource({"system.attributes.damageReduction": 0});
-  }
+  // Initialize DR property
+  document.updateSource({"system.attributes.damageReduction": 0});
 });
 
 // Function to modify chat messages for combat rolls - simplified to just show AP values
