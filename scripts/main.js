@@ -367,42 +367,29 @@ function modifyWeaponSheetDisplay(app, html, data) {
   // Only proceed if this is a weapon
   if (app.item.type !== "weapon") return;
   
-  console.log("coriolis-combat-reloaded | Modifying weapon item sheet");
+  // First, remove ALL existing AP fields to avoid duplicates
+  const existingFields = html.find('.resource-label:contains("Armor Penetration")').closest('.resource');
   
-  // Force the item to have the armorPenetration property
-  if (app.item.system.armorPenetration === undefined) {
-    app.item.update({"system.armorPenetration": 0});
+  // Only leave one field if we have multiple
+  if (existingFields.length > 1) {
+    existingFields.slice(1).remove();
   }
-  
-  // Wait a moment for the sheet to fully render
-  setTimeout(() => {
-    // First, completely remove ALL existing AP fields
-    const apFields = html.find('.resource-label:contains("Armor Penetration")').closest('.resource');
-    console.log(`coriolis-combat-reloaded | Found ${apFields.length} AP fields`);
-    apFields.remove();
-    
-    // Also remove any that might have different naming
-    html.find('.ap-field').remove();
-    
-    // And any with exact text match
-    html.find('label').filter(function() {
-      return $(this).text().trim() === "Armor Penetration";
-    }).closest('.resource').remove();
-    
+  // If we have no fields, add one
+  else if (existingFields.length === 0) {
     // Find the damage input field
     const damageField = html.find('.resource-label:contains("Damage")').closest('.resource');
     
-    // Add our AP field after damage, but only if we don't already have one
-    if (damageField.length && html.find('.combat-reloaded-ap-field').length === 0) {
+    // Add AP field after damage
+    if (damageField.length) {
       // Get the current AP value safely
       let apValue = 0;
       if (app.item.system.armorPenetration !== undefined) {
         apValue = parseInt(app.item.system.armorPenetration) || 0;
       }
       
-      // Create the AP field with a custom class for our module
+      // Create the AP field
       const apField = `
-        <div class="resource numeric-input flexrow ap-field combat-reloaded-ap-field">
+        <div class="resource numeric-input flexrow ap-field">
           <label class="resource-label">${game.i18n.localize("YZECORIOLIS.ArmorPenetration")}</label>
           <input type="number" min="0" name="system.armorPenetration" value="${apValue}" data-dtype="Number" />
         </div>
@@ -411,33 +398,7 @@ function modifyWeaponSheetDisplay(app, html, data) {
       // Insert after the damage field
       $(apField).insertAfter(damageField);
     }
-    
-    // Set up a mutation observer to catch any dynamically added fields
-    const targetNode = html[0];
-    const config = { childList: true, subtree: true };
-    
-    const observer = new MutationObserver((mutationsList, observer) => {
-      for (const mutation of mutationsList) {
-        if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-          // Check if any AP fields were added
-          const addedApFields = html.find('.resource-label:contains("Armor Penetration")').closest('.resource');
-          if (addedApFields.length > 1) {
-            // Keep only our AP field
-            addedApFields.not('.combat-reloaded-ap-field').remove();
-          }
-        }
-      }
-    });
-    
-    // Start observing
-    observer.observe(targetNode, config);
-    
-    // Stop the observer when the sheet closes
-    app.options.onClose = function() {
-      observer.disconnect();
-      if (app._originalOnClose) app._originalOnClose();
-    };
-  }, 100);
+  }
 }
 
 // Function to modify weapon section to include AP
