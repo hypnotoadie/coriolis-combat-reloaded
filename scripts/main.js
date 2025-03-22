@@ -136,12 +136,15 @@ Hooks.on("renderChatMessage", (message, html, data) => {
 
 // Function to clean up empty attribute blocks
 function cleanEmptyAttributes(html) {
-  // Find the empty DR attribute block and hide it
-  const emptyDRBlock = html.find('.attr-block.bg-damageReduction');
-  if (emptyDRBlock.length) {
-    // Find the parent column and hide it
-    emptyDRBlock.closest('.attr-item').hide();
-  }
+  // Find and hide all empty DR attribute blocks
+  html.find('.attr-block.bg-damageReduction').each(function() {
+    $(this).closest('.attr-item').hide();
+  });
+  
+  // Also hide any manualDROverride elements
+  html.find('input[name="system.attributes.manualDROverride.value"]').each(function() {
+    $(this).closest('.attr-item').hide();
+  });
 }
 
 // Function to patch core coriolis roll evaluation
@@ -364,8 +367,15 @@ function modifyWeaponSheetDisplay(app, html, data) {
   // Only proceed if this is a weapon
   if (app.item.type !== "weapon") return;
   
-  // Remove any existing AP fields to avoid duplicates
+  // Remove ALL existing AP fields to avoid duplicates
+  // Use multiple selectors to catch all variations
   html.find('.resource-label:contains("Armor Penetration")').closest('.resource').remove();
+  html.find('.ap-field').remove();
+  
+  // Also look for any exact text matches
+  html.find('label').filter(function() {
+    return $(this).text().trim() === "Armor Penetration";
+  }).closest('.resource').remove();
   
   // Find the damage input field
   const damageField = html.find('.resource-label:contains("Damage")').closest('.resource');
