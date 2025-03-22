@@ -38,22 +38,9 @@ Hooks.once("init", () => {
 
 // Checks if the CSS is loaded. If it is, the module is ready.
 Hooks.once('ready', () => {
-  console.log("coriolis-combat-reloaded | Module ready - initializing flags");
+  console.log("coriolis-combat-reloaded | Module ready");
   
   if (game.settings.get(MODULE_ID, "enableCombatReloaded")) {
-    // Initialize flags for all actors
-    game.actors.forEach(actor => {
-      if (!actor.flags["coriolis-combat-reloaded"]) {
-        const calculatedDR = calculateActorDR(actor);
-        actor.update({
-          "flags.coriolis-combat-reloaded.calculatedDR": calculatedDR,
-          "flags.coriolis-combat-reloaded.manualDRValue": null
-        }).catch(error => {
-          console.error("coriolis-combat-reloaded | Error initializing flags for actor:", actor.name, error);
-        });
-      }
-    });
-    
     ui.notifications.info(game.i18n.localize("coriolis-combat-reloaded.messages.moduleActive"));
   }
 });
@@ -119,23 +106,7 @@ Hooks.on("renderChatMessage", (message, html, data) => {
   }
 });
 
-
-// Actor Prep - simplified to avoid interference
-Hooks.on("preUpdateActor", (actor, updateData, options, userId) => {
-  if (!game.settings.get(MODULE_ID, "enableCombatReloaded")) return;
-  
-  // Only set DR if we're doing item updates that might affect armor
-  if (updateData.items && !hasProperty(updateData, "system.attributes.damageReduction")) {
-    // Calculate DR from equipped armor
-    const calculatedDR = calculateActorDR(actor);
-    
-    // If not manually overridden
-    if (actor.system.attributes?.damageReduction === undefined) {
-      setProperty(updateData, "system.attributes.damageReduction", calculatedDR);
-    }
-  }
-});
-
+// Function to patch core coriolis roll evaluation
 function patchCoriolisRollEvaluation() {
   // Store the original function for later calling
   const originalCoriolisRoll = game.yzecoriolis.coriolisRoll;
@@ -145,24 +116,6 @@ function patchCoriolisRollEvaluation() {
     // Add AP handling to rollData if it's a weapon roll
     if (rollData.rollType === "weapon" && !rollData.armorPenetration) {
       rollData.armorPenetration = 0;
-    }
-    
-    // If this is a weapon roll against a target with DR, handle it
-    if (rollData.rollType === "weapon" && rollData.targetActor) {
-      // Get the DR from our flag instead of from attributes
-      let targetDR = 0;
-      try {
-        const targetActor = game.actors.get(rollData.targetActor);
-        if (targetActor) {
-          targetDR = targetActor.flags["coriolis-combat-reloaded"]?.calculatedDR || 0;
-          console.log("coriolis-combat-reloaded | Target DR:", targetDR);
-          
-          // Add the DR to rollData for the roll template
-          rollData.targetDR = targetDR;
-        }
-      } catch (error) {
-        console.error("coriolis-combat-reloaded | Error getting target DR:", error);
-      }
     }
     
     // Call the original function with our modified data
@@ -175,24 +128,9 @@ function extendWeaponClass() {
   // Make sure required classes exist
   if (!game.yzecoriolis.yzecoriolisItem) return;
   
-  // Create a preparation hook for weapon items
+  // Add AP field to weapon items
   Hooks.on("preCreateItem", (document, data, options, userId) => {
-    // Only update if the document exists and it's a weapon
-    if (!document || data.type !== "weapon") return;
-    
-    // Check if this item is being added to an actor
-    // Only proceed if the actor exists to prevent null reference errors
-    const actor = document.parent;
-    if (!actor) {
-      // For items not directly linked to an actor, still add the AP property
-      if (!data.system?.armorPenetration) {
-        document.updateSource({"system.armorPenetration": 0});
-      }
-      return;
-    }
-    
-    // For items linked to an actor, safely update
-    if (!data.system?.armorPenetration) {
+    if (data.type === "weapon" && !data.system?.armorPenetration) {
       document.updateSource({"system.armorPenetration": 0});
     }
   });
@@ -203,32 +141,12 @@ function extendArmorClass() {
   // Make sure required classes exist
   if (!game.yzecoriolis.yzecoriolisItem) return;
   
-  // Create a preparation hook for armor items
+  // Convert armor rating to DR for armor items
   Hooks.on("preCreateItem", (document, data, options, userId) => {
-    // Only update if the document exists and it's armor
-    if (!document || data.type !== "armor") return;
-    
-    // Check if this item is being added to an actor
-    // Only proceed if the actor exists to prevent null reference errors
-    const actor = document.parent;
-    if (!actor) {
-      // For items not directly linked to an actor, still convert AR to DR
-      if (!data.system?.damageReduction) {
-        const armorRating = data.system?.armorRating || 0;
-        document.updateSource({
-          "system.damageReduction": armorRating,
-          "system.-=armorRating": null  // Remove the old property
-        });
-      }
-      return;
-    }
-    
-    // For items linked to an actor, safely update
-    if (!data.system?.damageReduction) {
+    if (data.type === "armor" && !data.system?.damageReduction) {
       const armorRating = data.system?.armorRating || 0;
       document.updateSource({
-        "system.damageReduction": armorRating,
-        "system.-=armorRating": null  // Remove the old property
+        "system.damageReduction": armorRating
       });
     }
   });
@@ -272,27 +190,6 @@ function calculateActorDR(actor) {
   return totalDR;
 }
 
-// Fix for skill and attribute localization
-Hooks.on("renderyzecoriolisActorSheet", (app, html, data) => {
-  // Process all elements with YZECORIOLIS prefixes
-  html.find('.stat-label, .ability-name, .skill-name').each((i, el) => {
-    const element = $(el);
-    const text = element.text().trim();
-    
-    // Check if the text starts with "YZECORIOLIS."
-    if (text.startsWith("YZECORIOLIS.")) {
-      // Extract the key and try to localize it
-      const key = text;
-      const localizedText = game.i18n.localize(key);
-      
-      // Only replace if localization worked (if it returns the same string, it failed)
-      if (localizedText !== key) {
-        element.text(localizedText);
-      }
-    }
-  });
-});
-
 // Function to modify armor section to show DR instead of Armor Rating
 function modifyArmorSection(app, html, data) {
   console.log("coriolis-combat-reloaded | Modifying armor section");
@@ -325,11 +222,12 @@ function modifyArmorSection(app, html, data) {
 
 // Function to modify weapon section to include AP
 function modifyWeaponSection(app, html, data) {
-  // Check if AP header already exists to avoid duplication
-  if (html.find('.gear-category-name:contains("AP")').length > 0) return;
+  console.log("coriolis-combat-reloaded | Modifying weapon section");
   
   // Find the weapon header rows
   const weaponHeaders = html.find('.gear-category-header:contains("Weapons")');
+  
+  if (!weaponHeaders.length) return;
   
   weaponHeaders.each((i, header) => {
     // Get the header row
@@ -337,34 +235,46 @@ function modifyWeaponSection(app, html, data) {
     
     // Add AP column if it doesn't exist
     if (headerRow.length && !headerRow.find('.ap-column').length) {
-      // Find the damage column
-      const damageColumn = headerRow.find('.gear-column:contains("Damage")');
+      // Find where to add the AP column - after Init or Damage
+      const targetColumn = headerRow.find('.gear-column:contains("Damage")');
       
-      if (damageColumn.length) {
+      if (targetColumn.length) {
         // Add AP column after damage
         const apColumn = $(`<div class="gear-column ap-column" style="flex: 0 0 40px; text-align: center;">AP</div>`);
+        targetColumn.after(apColumn);
+      }
+    }
+    
+    // Update all weapon items within this category
+    const weaponItems = $(header).nextUntil('.gear-category-header').filter('.gear.item');
+    weaponItems.each((j, weaponItem) => {
+      const itemId = weaponItem.dataset.itemId;
+      if (!itemId) return;
+      
+      const item = app.actor.items.get(itemId);
+      if (!item || item.type !== "weapon") return;
+      
+      // Find where to add the AP value - after Damage column
+      const itemRow = $(weaponItem).find('.item-row');
+      if (!itemRow.length) return;
+
+      // First check if AP column already exists
+      if (itemRow.find('.ap-column').length) return;
+      
+      // Find the damage column to append after
+      const damageColumn = itemRow.find('.gear-column').eq(3); // Usually the 4th column is damage
+      
+      if (damageColumn.length) {
+        // Get AP value from item data
+        const apValue = item.system.armorPenetration || 0;
+        
+        // Create AP column for this item
+        const apColumn = $(`<div class="gear-column ap-column" style="flex: 0 0 40px; text-align: center;"><span class="ap-value">${apValue}</span></div>`);
+        
+        // Insert after damage column
         damageColumn.after(apColumn);
       }
-    }
-  });
-  
-  // Update each weapon item to show AP value
-  html.find('.gear.item').each((i, el) => {
-    const itemId = el.dataset.itemId;
-    if (!itemId) return;
-    
-    const item = app.actor.items.get(itemId);
-    if (item?.type === "weapon") {
-      // Find damage data and add AP after it
-      const damageData = $(el).find('.gear-column:contains(" ")').first();
-      
-      // Only add AP column if it doesn't exist
-      if (damageData.length && !$(el).find('.ap-column').length) {
-        const apValue = item.system.armorPenetration || 0;
-        const apColumn = $(`<div class="gear-column ap-column" style="flex: 0 0 40px; text-align: center;"><span class="ap-value">${apValue}</span></div>`);
-        damageData.after(apColumn);
-      }
-    }
+    });
   });
 }
 
@@ -431,16 +341,19 @@ function addManualDRToActorSheet(app, html, data) {
   const statsSection = html.find('.always-visible-stats .perma-stats-list');
   if (!statsSection.length) return;
   
-  // Create the DR entry
+  // First remove any existing DR entry to avoid duplicates
+  statsSection.find('.stat-label:contains("Damage Reduction")').closest('.entry').remove();
+  
+  // Create the DR entry with a normal input field that's part of the actor form
   const drEntry = `
     <li class="entry flexrow">
       <div class="stat-label">${game.i18n.localize("coriolis-combat-reloaded.labels.damageReduction")}</div>
       <div class="number">
-        <input class="dr-value" 
-               type="number" 
-               data-dr-id="${actor.id}" 
+        <input type="text" 
+               name="system.attributes.damageReduction" 
                value="${currentDR}" 
                min="0"
+               data-dtype="Number"
                title="${game.i18n.localize("coriolis-combat-reloaded.tooltips.damageReduction")}" />
       </div>
     </li>
@@ -454,28 +367,7 @@ function addManualDRToActorSheet(app, html, data) {
     // If can't find Radiation, just append to the end
     statsSection.append(drEntry);
   }
-  
-  // Add event listener for DR changes
-  html.find('.dr-value').change(async (event) => {
-    event.preventDefault();
-    const newDR = parseInt(event.target.value) || 0;
-    const actorId = event.target.dataset.drId;
-    const targetActor = game.actors.get(actorId);
-    
-    if (!targetActor) return;
-    
-    try {
-      await targetActor.update({
-        "system.attributes.damageReduction": newDR
-      });
-      ui.notifications.info("Damage Reduction updated");
-    } catch (error) {
-      console.error("Error updating DR:", error);
-      ui.notifications.error("Error updating Damage Reduction");
-    }
-  });
 }
-
 
 // Extend actor preparation to include DR calculations
 Hooks.on("preCreateActor", (document, data, options, userId) => {
@@ -485,7 +377,7 @@ Hooks.on("preCreateActor", (document, data, options, userId) => {
   document.updateSource({"system.attributes.damageReduction": 0});
 });
 
-// Function to modify chat messages for combat rolls - simplified to just show AP values
+// Function to modify chat messages for combat rolls - show AP values
 function modifyCombatRollMessage(message, html, data) {
   // Check if this is a weapon roll
   const isWeaponRoll = html.find('h2:contains("Weapon")').length > 0 || 
