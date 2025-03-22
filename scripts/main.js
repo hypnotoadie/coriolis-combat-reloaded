@@ -119,22 +119,20 @@ Hooks.on("renderChatMessage", (message, html, data) => {
   }
 });
 
-// Actor Prep
+
+// Actor Prep - simplified to avoid interference
 Hooks.on("preUpdateActor", (actor, updateData, options, userId) => {
   if (!game.settings.get(MODULE_ID, "enableCombatReloaded")) return;
   
-  // If we're manually updating damageReduction, don't interfere
-  if (hasProperty(updateData, "system.attributes.damageReduction")) {
-    return;
-  }
-  
-  // If we're updating the actor and the DR needs to be calculated
-  if (updateData.system || updateData.items) {
+  // Only set DR if we're doing item updates that might affect armor
+  if (updateData.items && !hasProperty(updateData, "system.attributes.damageReduction")) {
     // Calculate DR from equipped armor
     const calculatedDR = calculateActorDR(actor);
     
-    // Set the DR attribute
-    setProperty(updateData, "system.attributes.damageReduction", calculatedDR);
+    // If not manually overridden
+    if (actor.system.attributes?.damageReduction === undefined) {
+      setProperty(updateData, "system.attributes.damageReduction", calculatedDR);
+    }
   }
 });
 
@@ -395,13 +393,13 @@ function modifyArmorSheetDisplay(app, html, data) {
   }
 }
 
-// Function to add manual DR input to character sheet
+// Adds manual DR to actor sheet, and should remove the boxes that get generated
 function addManualDRToActorSheet(app, html, data) {
   // Get current values
   const actor = app.actor;
   const calculatedDR = calculateActorDR(actor);
   
-  // Get the current DR value
+  // Get the current DR value (may be manual or calculated)
   const currentDR = actor.system.attributes?.damageReduction || 0;
   
   // Find the always-visible-stats section
@@ -413,11 +411,11 @@ function addManualDRToActorSheet(app, html, data) {
     <li class="entry flexrow">
       <div class="stat-label">${game.i18n.localize("coriolis-combat-reloaded.labels.damageReduction")}</div>
       <div class="number">
-        <input class="input-value dr-value" 
+        <input class="dr-value" 
                type="number" 
-               name="system.attributes.damageReduction" 
+               data-current-dr="${currentDR}" 
                value="${currentDR}" 
-               data-dtype="Number"
+               min="0"
                title="${game.i18n.localize("coriolis-combat-reloaded.tooltips.damageReduction")}" />
       </div>
     </li>
@@ -431,6 +429,23 @@ function addManualDRToActorSheet(app, html, data) {
     // If can't find Radiation, just append to the end
     statsSection.append(drEntry);
   }
+  
+  // Add event listener for DR changes
+  html.find('.dr-value').change(async (event) => {
+    event.preventDefault();
+    const newDR = parseInt(event.target.value) || 0;
+    
+    // Use setTimeout to ensure proper data structure initialization
+    setTimeout(async () => {
+      try {
+        await actor.update({
+          "system.attributes.damageReduction": newDR
+        });
+      } catch (error) {
+        console.error("Error updating DR:", error);
+      }
+    }, 0);
+  });
 }
 
 // Function to calculate DR from equipped armor
@@ -451,7 +466,6 @@ function calculateActorDR(actor) {
   
   return totalDR;
 }
-
 
 // Extend actor preparation to include DR calculations
 Hooks.on("preCreateActor", (document, data, options, userId) => {
