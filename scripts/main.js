@@ -232,28 +232,46 @@ function extendArmorClass() {
       });
     }
   });
-  
-  // Add a hook for when armor is equipped or unequipped
-  Hooks.on("updateItem", (item, updateData, options, userId) => {
-    if (!game.settings.get(MODULE_ID, "enableCombatReloaded")) return;
-    
-    // If this is an armor item and equipped status changed
-    if (item.type === "armor" && updateData.system?.equipped !== undefined) {
-      const actor = item.parent;
-      if (actor) {
-        // Recalculate DR and force an update
-        const calculatedDR = calculateActorDR(actor);
-        const manualDR = actor.system.attributes?.manualDROverride;
-        const finalDR = (manualDR !== undefined && manualDR !== null) ? manualDR : calculatedDR;
-        
-        // Update the DR value
-        actor.update({
-          "system.attributes.damageReduction": finalDR
-        });
-      }
-    }
-  });
 }
+
+// Actor Prep - Handle armor equip/unequip to update DR
+Hooks.on("updateItem", async (item, updateData, options, userId) => {
+  if (!game.settings.get(MODULE_ID, "enableCombatReloaded")) return;
+  
+  // Check if this is armor and equipment status changed
+  if (item.type === "armor" && hasProperty(updateData, "system.equipped")) {
+    const actor = item.actor;
+    if (!actor) return;
+    
+    // Calculate new DR
+    const calculatedDR = calculateActorDR(actor);
+    
+    // Update the actor with the new DR
+    await actor.update({
+      "system.attributes.damageReduction": calculatedDR
+    });
+  }
+});
+
+// Function to calculate DR from equipped armor
+function calculateActorDR(actor) {
+  let totalDR = 0;
+  
+  // Find all equipped armor items
+  const equippedArmor = actor.items.filter(item => 
+    item.type === "armor" && 
+    item.system.equipped === true
+  );
+  
+  // Sum up all DR values from equipped armor
+  for (const armor of equippedArmor) {
+    const armorDR = armor.system.damageReduction || 0;
+    totalDR += armorDR;
+  }
+  
+  return totalDR;
+}
+
 // Fix for skill and attribute localization
 Hooks.on("renderyzecoriolisActorSheet", (app, html, data) => {
   // Process all elements with YZECORIOLIS prefixes
@@ -274,6 +292,7 @@ Hooks.on("renderyzecoriolisActorSheet", (app, html, data) => {
     }
   });
 });
+
 // Function to modify armor section to show DR instead of Armor Rating
 function modifyArmorSection(app, html, data) {
   console.log("coriolis-combat-reloaded | Modifying armor section");
@@ -304,40 +323,46 @@ function modifyArmorSection(app, html, data) {
   });
 }
 
-// Function to modify weapon section to show AP
+// Function to modify weapon section to include AP
 function modifyWeaponSection(app, html, data) {
-  console.log("coriolis-combat-reloaded | Modifying weapon section");
+  // Check if AP header already exists to avoid duplication
+  if (html.find('.gear-category-name:contains("AP")').length > 0) return;
   
-  // Change the Weapon header to include AP if needed
-  const weaponHeader = html.find('.gear-category-header:contains("Weapons")');
-  if (weaponHeader.length) {
-    // Add a column for AP in the header if it doesn't exist
-    if (!weaponHeader.find('.gear-category-name:contains("AP")').length) {
-      // First find where to insert AP - after damage column
-      const damageColumn = weaponHeader.find('.gear-category-name:contains("Damage")');
+  // Find the weapon header rows
+  const weaponHeaders = html.find('.gear-category-header:contains("Weapons")');
+  
+  weaponHeaders.each((i, header) => {
+    // Get the header row
+    const headerRow = $(header).find('.gear-row-header');
+    
+    // Add AP column if it doesn't exist
+    if (headerRow.length && !headerRow.find('.ap-column').length) {
+      // Find the damage column
+      const damageColumn = headerRow.find('.gear-column:contains("Damage")');
+      
       if (damageColumn.length) {
-        const apColumn = $(`<div class="gear-category-name center">${game.i18n.localize("coriolis-combat-reloaded.labels.ap")}</div>`);
+        // Add AP column after damage
+        const apColumn = $(`<div class="gear-column ap-column" style="flex: 0 0 40px; text-align: center;">AP</div>`);
         damageColumn.after(apColumn);
       }
     }
-  }
+  });
   
-  // Update each weapon item to show AP
+  // Update each weapon item to show AP value
   html.find('.gear.item').each((i, el) => {
     const itemId = el.dataset.itemId;
     if (!itemId) return;
     
     const item = app.actor.items.get(itemId);
     if (item?.type === "weapon") {
-      // Find the damage row to insert AP after it
-      const damageElement = $(el).find('.gear-row-data:contains("' + item.system.damage + '")');
-      if (damageElement.length) {
-        // Check if AP column already exists
-        if (!$(el).find('.ap-column').length) {
-          const apValue = item.system.armorPenetration || 0;
-          const apElement = $(`<div class="gear-row-data ap-column"><span class="ap-value">${apValue}</span></div>`);
-          damageElement.after(apElement);
-        }
+      // Find damage data and add AP after it
+      const damageData = $(el).find('.gear-column:contains(" ")').first();
+      
+      // Only add AP column if it doesn't exist
+      if (damageData.length && !$(el).find('.ap-column').length) {
+        const apValue = item.system.armorPenetration || 0;
+        const apColumn = $(`<div class="gear-column ap-column" style="flex: 0 0 40px; text-align: center;"><span class="ap-value">${apValue}</span></div>`);
+        damageData.after(apColumn);
       }
     }
   });
@@ -393,7 +418,7 @@ function modifyArmorSheetDisplay(app, html, data) {
   }
 }
 
-// Adds manual DR to actor sheet, and should remove the boxes that get generated
+// Function to add manual DR input to character sheet
 function addManualDRToActorSheet(app, html, data) {
   // Get current values
   const actor = app.actor;
@@ -413,7 +438,7 @@ function addManualDRToActorSheet(app, html, data) {
       <div class="number">
         <input class="dr-value" 
                type="number" 
-               data-current-dr="${currentDR}" 
+               data-dr-id="${actor.id}" 
                value="${currentDR}" 
                min="0"
                title="${game.i18n.localize("coriolis-combat-reloaded.tooltips.damageReduction")}" />
@@ -434,38 +459,23 @@ function addManualDRToActorSheet(app, html, data) {
   html.find('.dr-value').change(async (event) => {
     event.preventDefault();
     const newDR = parseInt(event.target.value) || 0;
+    const actorId = event.target.dataset.drId;
+    const targetActor = game.actors.get(actorId);
     
-    // Use setTimeout to ensure proper data structure initialization
-    setTimeout(async () => {
-      try {
-        await actor.update({
-          "system.attributes.damageReduction": newDR
-        });
-      } catch (error) {
-        console.error("Error updating DR:", error);
-      }
-    }, 0);
+    if (!targetActor) return;
+    
+    try {
+      await targetActor.update({
+        "system.attributes.damageReduction": newDR
+      });
+      ui.notifications.info("Damage Reduction updated");
+    } catch (error) {
+      console.error("Error updating DR:", error);
+      ui.notifications.error("Error updating Damage Reduction");
+    }
   });
 }
 
-// Function to calculate DR from equipped armor
-function calculateActorDR(actor) {
-  let totalDR = 0;
-  
-  // Find all equipped armor items
-  const equippedArmor = actor.items.filter(item => 
-    item.type === "armor" && 
-    item.system.equipped === true
-  );
-  
-  // Sum up all DR values from equipped armor
-  for (const armor of equippedArmor) {
-    const armorDR = armor.system.damageReduction || 0;
-    totalDR += armorDR;
-  }
-  
-  return totalDR;
-}
 
 // Extend actor preparation to include DR calculations
 Hooks.on("preCreateActor", (document, data, options, userId) => {
