@@ -141,20 +141,17 @@ Hooks.on("renderChatMessage", (message, html, data) => {
 Hooks.on("preUpdateActor", (actor, updateData, options, userId) => {
   if (!game.settings.get(MODULE_ID, "enableCombatReloaded")) return;
   
-  // Prevent system-level updates to our DR attributes to avoid issues
-  if (updateData.system?.attributes?.damageReduction !== undefined) {
-    delete updateData.system.attributes.damageReduction;
-  }
-  
-  if (updateData.system?.attributes?.manualDROverride !== undefined) {
-    delete updateData.system.attributes.manualDROverride;
-  }
-  
-  // If actor's items are being updated (like equipping armor), recalculate DR
-  if (updateData.items) {
-    calculateAndApplyDR(actor).catch(error => {
-      console.error("coriolis-combat-reloaded | Error in preUpdateActor:", error);
-    });
+  // Only add damageReduction if we're updating system data
+  if (updateData.system && updateData.system.attributes) {
+    // Get current values
+    const calculatedDR = calculateActorDR(actor);
+    const manualDR = actor.system.attributes?.manualDROverride;
+    
+    // If manual override exists, use it, otherwise use calculated value
+    const finalDR = (manualDR !== undefined && manualDR !== null) ? manualDR : calculatedDR;
+    
+    // Set damageReduction directly
+    updateData.system.attributes.damageReduction = finalDR;
   }
 });
 
@@ -257,14 +254,20 @@ function extendArmorClass() {
   
   // Add a hook for when armor is equipped or unequipped
   Hooks.on("updateItem", (item, updateData, options, userId) => {
-    if (item.type !== "armor") return;
+    if (!game.settings.get(MODULE_ID, "enableCombatReloaded")) return;
     
-    // If equipped status is changing, recalculate DR
-    if (updateData.system?.equipped !== undefined) {
+    // If this is an armor item and equipped status changed
+    if (item.type === "armor" && updateData.system?.equipped !== undefined) {
       const actor = item.parent;
       if (actor) {
-        calculateAndApplyDR(actor).catch(error => {
-          console.error("coriolis-combat-reloaded | Error updating DR after armor change:", error);
+        // Recalculate DR and force an update
+        const calculatedDR = calculateActorDR(actor);
+        const manualDR = actor.system.attributes?.manualDROverride;
+        const finalDR = (manualDR !== undefined && manualDR !== null) ? manualDR : calculatedDR;
+        
+        // Update the DR value
+        actor.update({
+          "system.attributes.damageReduction": finalDR
         });
       }
     }
@@ -391,39 +394,30 @@ function modifyArmorSheetDisplay(app, html, data) {
 }
 
 // Function to add manual DR input to character sheet
-// updated the data structure a bit
+// SIMPLIFIED addManualDRToActorSheet FUNCTION
 function addManualDRToActorSheet(app, html, data) {
-  console.log("coriolis-combat-reloaded | Adding manual DR to actor sheet");
-  
   // Get current values
   const actor = app.actor;
   const calculatedDR = calculateActorDR(actor);
   
-  // Get the manual DR value - need to check both forms since we're not sure how it's stored
-  let manualDR = undefined;
-  if (typeof actor.system.attributes?.manualDROverride === 'object') {
-    manualDR = actor.system.attributes.manualDROverride?.value;
-  } else {
-    manualDR = actor.system.attributes?.manualDROverride;
-  }
+  // Keep this simple - just use whatever value is there
+  const manualDR = actor.system.attributes?.manualDROverride;
   
   // Find the always-visible-stats section
   const statsSection = html.find('.always-visible-stats .perma-stats-list');
   if (!statsSection.length) return;
   
-  // Create the DR entry with a different approach - using a custom data attribute
-  // rather than system.attributes.manualDROverride
+  // Create the DR entry
   const drEntry = `
     <li class="entry flexrow">
       <div class="stat-label">${game.i18n.localize("coriolis-combat-reloaded.labels.damageReduction")}</div>
       <div class="number">
         <input class="input-value dr-value" 
-               type="number" 
-               data-dr-custom="true"
+               type="text" 
+               name="system.attributes.manualDROverride" 
                value="${manualDR !== undefined ? manualDR : ''}" 
                placeholder="${calculatedDR}" 
-               data-dtype="Number"
-               title="${game.i18n.localize("coriolis-combat-reloaded.tooltips.damageReduction")}" />
+               data-dtype="Number" />
       </div>
     </li>
   `;
@@ -437,59 +431,14 @@ function addManualDRToActorSheet(app, html, data) {
     statsSection.append(drEntry);
   }
   
-  // Remove any existing attribute boxes for DR
-  html.find('.attr-block.bg-damageReduction').closest('li').remove();
-  html.find('.attr-block.bg-manualDROverride').closest('li').remove();
-  
-  // Add an event listener for DR changes
-  html.find('input[data-dr-custom="true"]').on('change', async (event) => {
-    const newValue = event.target.value ? parseInt(event.target.value) : null;
-    
-    // Use direct update methods to avoid triggering the normal attribute update flow
-    try {
-      // Use updateSource to modify data directly without validation
-      // This bypasses the system's normal attribute handling
-      await actor.update({
-        "flags.coriolis-combat-reloaded.manualDRValue": newValue
-      });
-      
-      // Update the actor's calculation without touching system.attributes
-      await calculateAndApplyDR(actor);
-      
-      console.log("coriolis-combat-reloaded | DR updated:", newValue);
-    } catch (error) {
-      console.error("coriolis-combat-reloaded | Error updating DR:", error);
-    }
-  });
+  // Clean up - remove the extra attribute boxes
+  setTimeout(() => {
+    // Use setTimeout to make sure this runs after other rendering operations
+    html.find('.attr-block.bg-damageReduction').closest('li').remove();
+    html.find('.attr-block.bg-manualDROverride').closest('li').remove();
+  }, 0);
 }
 
-// Calculate and apply DR to an actor withuot using attributes
-async function calculateAndApplyDR(actor) {
-  // Calculate DR from equipped armor
-  const calculatedDR = calculateActorDR(actor);
-  
-  // Get manual override from flags instead of attributes
-  const manualDR = actor.flags["coriolis-combat-reloaded"]?.manualDRValue;
-  const finalDR = (manualDR !== undefined && manualDR !== null) ? manualDR : calculatedDR;
-  
-  // Use a different approach to update the actual DR value
-  // Store it in both places to ensure compatibility
-  try {
-    // We don't use this because it creates attribute boxes
-    // await actor.update({"system.attributes.damageReduction": finalDR});
-    
-    // Instead, use this approach to update the derived value
-    await actor.update({
-      "flags.coriolis-combat-reloaded.calculatedDR": finalDR
-    });
-    
-    console.log("coriolis-combat-reloaded | Applied DR:", finalDR);
-    return finalDR;
-  } catch (error) {
-    console.error("coriolis-combat-reloaded | Error applying DR:", error);
-    return calculatedDR;
-  }
-}
 
 // Function to calculate DR from equipped armor
 function calculateActorDR(actor) {
