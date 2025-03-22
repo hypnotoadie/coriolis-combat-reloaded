@@ -367,38 +367,141 @@ function modifyWeaponSheetDisplay(app, html, data) {
   // Only proceed if this is a weapon
   if (app.item.type !== "weapon") return;
   
-  // Remove ALL existing AP fields to avoid duplicates
-  // Use multiple selectors to catch all variations
-  html.find('.resource-label:contains("Armor Penetration")').closest('.resource').remove();
-  html.find('.ap-field').remove();
+  console.log("coriolis-combat-reloaded | Modifying weapon item sheet");
   
-  // Also look for any exact text matches
-  html.find('label').filter(function() {
-    return $(this).text().trim() === "Armor Penetration";
-  }).closest('.resource').remove();
+  // Force the item to have the armorPenetration property
+  if (app.item.system.armorPenetration === undefined) {
+    app.item.update({"system.armorPenetration": 0});
+  }
   
-  // Find the damage input field
-  const damageField = html.find('.resource-label:contains("Damage")').closest('.resource');
-  
-  // Add AP field after damage
-  if (damageField.length) {
-    // Get the current AP value safely
-    let apValue = 0;
-    if (app.item.system.armorPenetration !== undefined) {
-      apValue = parseInt(app.item.system.armorPenetration) || 0;
+  // Wait a moment for the sheet to fully render
+  setTimeout(() => {
+    // First, completely remove ALL existing AP fields
+    const apFields = html.find('.resource-label:contains("Armor Penetration")').closest('.resource');
+    console.log(`coriolis-combat-reloaded | Found ${apFields.length} AP fields`);
+    apFields.remove();
+    
+    // Also remove any that might have different naming
+    html.find('.ap-field').remove();
+    
+    // And any with exact text match
+    html.find('label').filter(function() {
+      return $(this).text().trim() === "Armor Penetration";
+    }).closest('.resource').remove();
+    
+    // Find the damage input field
+    const damageField = html.find('.resource-label:contains("Damage")').closest('.resource');
+    
+    // Add our AP field after damage, but only if we don't already have one
+    if (damageField.length && html.find('.combat-reloaded-ap-field').length === 0) {
+      // Get the current AP value safely
+      let apValue = 0;
+      if (app.item.system.armorPenetration !== undefined) {
+        apValue = parseInt(app.item.system.armorPenetration) || 0;
+      }
+      
+      // Create the AP field with a custom class for our module
+      const apField = `
+        <div class="resource numeric-input flexrow ap-field combat-reloaded-ap-field">
+          <label class="resource-label">${game.i18n.localize("YZECORIOLIS.ArmorPenetration")}</label>
+          <input type="number" min="0" name="system.armorPenetration" value="${apValue}" data-dtype="Number" />
+        </div>
+      `;
+      
+      // Insert after the damage field
+      $(apField).insertAfter(damageField);
     }
     
-    // Create the AP field
-    const apField = `
-      <div class="resource numeric-input flexrow ap-field">
-        <label class="resource-label">${game.i18n.localize("YZECORIOLIS.ArmorPenetration")}</label>
-        <input type="number" min="0" name="system.armorPenetration" value="${apValue}" data-dtype="Number" />
-      </div>
-    `;
+    // Set up a mutation observer to catch any dynamically added fields
+    const targetNode = html[0];
+    const config = { childList: true, subtree: true };
     
-    // Insert after the damage field
-    $(apField).insertAfter(damageField);
+    const observer = new MutationObserver((mutationsList, observer) => {
+      for (const mutation of mutationsList) {
+        if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+          // Check if any AP fields were added
+          const addedApFields = html.find('.resource-label:contains("Armor Penetration")').closest('.resource');
+          if (addedApFields.length > 1) {
+            // Keep only our AP field
+            addedApFields.not('.combat-reloaded-ap-field').remove();
+          }
+        }
+      }
+    });
+    
+    // Start observing
+    observer.observe(targetNode, config);
+    
+    // Stop the observer when the sheet closes
+    app.options.onClose = function() {
+      observer.disconnect();
+      if (app._originalOnClose) app._originalOnClose();
+    };
+  }, 100);
+}
+
+// Function to modify weapon section to include AP
+function modifyWeaponSection(app, html, data) {
+  console.log("coriolis-combat-reloaded | Modifying weapon section");
+  
+  // Find the weapon header - the first one with "Weapons" text
+  const weaponHeader = html.find('.gear-category-header:contains("Weapons")').first();
+  if (!weaponHeader.length) return;
+  
+  // Properly reorder headers by finding each column we need
+  const headerRow = weaponHeader.children();
+  
+  // Find all gear-category-name elements
+  const headerNames = weaponHeader.find('.gear-category-name');
+  
+  // Only proceed if we can find the right columns
+  if (headerNames.length < 6) return;
+  
+  // If AP column doesn't exist yet, we need to add it
+  if (headerNames.filter(':contains("AP")').length === 0) {
+    // We need to insert AP in the right place - BEFORE Range
+    const rangeColumn = headerNames.filter(':contains("Range")').first();
+    
+    if (rangeColumn.length) {
+      // Create AP column and insert before range
+      const apColumn = $(`<div class="gear-category-name center">AP</div>`);
+      rangeColumn.before(apColumn);
+    }
   }
+  
+  // Now add AP values to each weapon item
+  const weaponItems = weaponHeader.nextUntil('.gear-category-header').filter('.gear.item');
+  weaponItems.each((i, el) => {
+    const itemId = el.dataset.itemId;
+    if (!itemId) return;
+    
+    const item = app.actor.items.get(itemId);
+    if (!item || item.type !== "weapon") return;
+    
+    // Get the item row and all data cells
+    const itemRow = $(el).find('.gear-bg');
+    const dataCells = itemRow.find('.gear-row-data');
+    
+    // Check if AP column already exists for this item
+    if (!$(el).find('.ap-cell').length) {
+      // The range value is typically the 5th data cell (index 4)
+      const rangeCell = dataCells.filter(':contains("Short"), :contains("Medium"), :contains("Long"), :contains("Extreme")').first();
+      
+      if (rangeCell.length) {
+        // Create AP cell with appropriate value - only use a single value, not comma-separated
+        const apValue = item.system.armorPenetration !== undefined ? parseInt(item.system.armorPenetration) || 0 : 0;
+        const apCell = $(`<div class="gear-row-data ap-cell">${apValue}</div>`);
+        
+        // Insert before range cell
+        rangeCell.before(apCell);
+      }
+    } else {
+      // If AP cell exists, update its value
+      const apCell = $(el).find('.ap-cell');
+      const apValue = item.system.armorPenetration !== undefined ? parseInt(item.system.armorPenetration) || 0 : 0;
+      apCell.text(apValue);
+    }
+  });
 }
 
 // Function to modify the armor item sheet
