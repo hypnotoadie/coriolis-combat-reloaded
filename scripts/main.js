@@ -73,7 +73,7 @@ Hooks.on("renderyzecoriolisActorSheet", (app, html, data) => {
   // Add manual DR input to the character attributes section
   addManualDRToActorSheet(app, html, data);
 });
-
+ 
 // Hook into the item sheet rendering
 Hooks.on("renderyzecoriolisItemSheet", (app, html, data) => {
   if (!game.settings.get(MODULE_ID, "enableCombatReloaded")) return;
