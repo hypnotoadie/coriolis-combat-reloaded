@@ -402,69 +402,6 @@ function modifyWeaponSheetDisplay(app, html, data) {
   }
 }
 
-// Function to modify weapon section to include AP
-function modifyWeaponSection(app, html, data) {
-  console.log("coriolis-combat-reloaded | Modifying weapon section");
-  
-  // Find the weapon header - the first one with "Weapons" text
-  const weaponHeader = html.find('.gear-category-header:contains("Weapons")').first();
-  if (!weaponHeader.length) return;
-  
-  // Properly reorder headers by finding each column we need
-  const headerRow = weaponHeader.children();
-  
-  // Find all gear-category-name elements
-  const headerNames = weaponHeader.find('.gear-category-name');
-  
-  // Only proceed if we can find the right columns
-  if (headerNames.length < 6) return;
-  
-  // If AP column doesn't exist yet, we need to add it
-  if (headerNames.filter(':contains("AP")').length === 0) {
-    // We need to insert AP in the right place - BEFORE Range
-    const rangeColumn = headerNames.filter(':contains("Range")').first();
-    
-    if (rangeColumn.length) {
-      // Create AP column and insert before range
-      const apColumn = $(`<div class="gear-category-name center">AP</div>`);
-      rangeColumn.before(apColumn);
-    }
-  }
-  
-  // Now add AP values to each weapon item
-  const weaponItems = weaponHeader.nextUntil('.gear-category-header').filter('.gear.item');
-  weaponItems.each((i, el) => {
-    const itemId = el.dataset.itemId;
-    if (!itemId) return;
-    
-    const item = app.actor.items.get(itemId);
-    if (!item || item.type !== "weapon") return;
-    
-    // Get the item row and all data cells
-    const itemRow = $(el).find('.gear-bg');
-    const dataCells = itemRow.find('.gear-row-data');
-    
-    // Check if AP column already exists for this item
-    if (!$(el).find('.ap-cell').length) {
-      // The range value is typically the 5th data cell (index 4)
-      const rangeCell = dataCells.filter(':contains("Short"), :contains("Medium"), :contains("Long"), :contains("Extreme")').first();
-      
-      if (rangeCell.length) {
-        // Create AP cell with appropriate value - only use a single value, not comma-separated
-        const apValue = item.system.armorPenetration !== undefined ? parseInt(item.system.armorPenetration) || 0 : 0;
-        const apCell = $(`<div class="gear-row-data ap-cell">${apValue}</div>`);
-        
-        // Insert before range cell
-        rangeCell.before(apCell);
-      }
-    } else {
-      // If AP cell exists, update its value
-      const apCell = $(el).find('.ap-cell');
-      const apValue = item.system.armorPenetration !== undefined ? parseInt(item.system.armorPenetration) || 0 : 0;
-      apCell.text(apValue);
-    }
-  });
-}
 
 // Function to modify the armor item sheet
 function modifyArmorSheetDisplay(app, html, data) {
