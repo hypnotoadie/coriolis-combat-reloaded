@@ -273,6 +273,44 @@ function fixLocalization(html) {
   });
 }
 
+function modifyWeaponSheetDisplay(app, html, data) {
+  // Only proceed if this is a weapon
+  if (app.item.type !== "weapon") return;
+  
+  // First, remove ALL existing AP fields to avoid duplicates
+  const existingFields = html.find('.resource-label:contains("Armor Penetration")').closest('.resource');
+  
+  // Only leave one field if we have multiple
+  if (existingFields.length > 1) {
+    existingFields.slice(1).remove();
+  }
+  // If we have no fields, add one
+  else if (existingFields.length === 0) {
+    // Find the damage input field
+    const damageField = html.find('.resource-label:contains("Damage")').closest('.resource');
+    
+    // Add AP field after damage
+    if (damageField.length) {
+      // Get the current AP value safely
+      let apValue = 0;
+      if (app.item.system.armorPenetration !== undefined) {
+        apValue = parseInt(app.item.system.armorPenetration) || 0;
+      }
+      
+      // Create the AP field
+      const apField = `
+        <div class="resource numeric-input flexrow ap-field">
+          <label class="resource-label">${game.i18n.localize("YZECORIOLIS.ArmorPenetration")}</label>
+          <input type="number" min="0" name="system.armorPenetration" value="${apValue}" data-dtype="Number" />
+        </div>
+      `;
+      
+      // Insert after the damage field
+      $(apField).insertAfter(damageField);
+    }
+  }
+}
+
 // Function to modify armor section to show DR instead of Armor Rating
 function modifyArmorSection(app, html, data) {
   console.log("coriolis-combat-reloaded | Modifying armor section");
