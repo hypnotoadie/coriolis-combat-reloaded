@@ -273,7 +273,26 @@ function extendArmorClass() {
     }
   });
 }
-
+// Fix for skill and attribute localization
+Hooks.on("renderyzecoriolisActorSheet", (app, html, data) => {
+  // Process all elements with YZECORIOLIS prefixes
+  html.find('.stat-label, .ability-name, .skill-name').each((i, el) => {
+    const element = $(el);
+    const text = element.text().trim();
+    
+    // Check if the text starts with "YZECORIOLIS."
+    if (text.startsWith("YZECORIOLIS.")) {
+      // Extract the key and try to localize it
+      const key = text;
+      const localizedText = game.i18n.localize(key);
+      
+      // Only replace if localization worked (if it returns the same string, it failed)
+      if (localizedText !== key) {
+        element.text(localizedText);
+      }
+    }
+  });
+});
 // Function to modify armor section to show DR instead of Armor Rating
 function modifyArmorSection(app, html, data) {
   console.log("coriolis-combat-reloaded | Modifying armor section");
