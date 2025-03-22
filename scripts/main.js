@@ -33,23 +33,6 @@ Hooks.once("init", () => {
     
     // Extend item classes for armor to handle DR
     extendArmorClass();
-    
-    // Register the DR attributes properly - this is important to fix the display issues
-    // This is a simple way to handle it assuming the system allows this approach
-    // If this doesn't work well, we would need to investigate the system's attribute registration methods
-    if (game.system.id === "yzecoriolis") {
-      try {
-        // Define damageReduction as a numeric attribute, not an object with value property
-        CONFIG.YZECORIOLIS = CONFIG.YZECORIOLIS || {};
-        CONFIG.YZECORIOLIS.attributes = CONFIG.YZECORIOLIS.attributes || {};
-        CONFIG.YZECORIOLIS.attributes.damageReduction = {
-          label: "Damage Reduction",
-          abbr: "DR"
-        };
-      } catch (e) {
-        console.error("coriolis-combat-reloaded | Error registering DR attribute:", e);
-      }
-    }
   }
 });
 
@@ -137,21 +120,20 @@ Hooks.on("renderChatMessage", (message, html, data) => {
 });
 
 // Actor Prep
-// Update how we set the damageReduction property to avoid the "in" operator error
 Hooks.on("preUpdateActor", (actor, updateData, options, userId) => {
   if (!game.settings.get(MODULE_ID, "enableCombatReloaded")) return;
   
-  // Only add damageReduction if we're updating system data
-  if (updateData.system && updateData.system.attributes) {
-    // Get current values
+  // If we're updating system data and there's no DR value set
+  if (updateData.system && !hasProperty(updateData.system, "attributes.damageReduction")) {
+    // Calculate DR from equipped armor
     const calculatedDR = calculateActorDR(actor);
     const manualDR = actor.system.attributes?.manualDROverride;
     
     // If manual override exists, use it, otherwise use calculated value
     const finalDR = (manualDR !== undefined && manualDR !== null) ? manualDR : calculatedDR;
     
-    // Set damageReduction directly
-    updateData.system.attributes.damageReduction = finalDR;
+    // Set the DR attribute
+    setProperty(updateData.system, "attributes.damageReduction", finalDR);
   }
 });
 
@@ -413,13 +395,10 @@ function modifyArmorSheetDisplay(app, html, data) {
 }
 
 // Function to add manual DR input to character sheet
-// SIMPLIFIED addManualDRToActorSheet FUNCTION
 function addManualDRToActorSheet(app, html, data) {
   // Get current values
   const actor = app.actor;
   const calculatedDR = calculateActorDR(actor);
-  
-  // Keep this simple - just use whatever value is there
   const manualDR = actor.system.attributes?.manualDROverride;
   
   // Find the always-visible-stats section
@@ -449,15 +428,7 @@ function addManualDRToActorSheet(app, html, data) {
     // If can't find Radiation, just append to the end
     statsSection.append(drEntry);
   }
-  
-  // Clean up - remove the extra attribute boxes
-  setTimeout(() => {
-    // Use setTimeout to make sure this runs after other rendering operations
-    html.find('.attr-block.bg-damageReduction').closest('li').remove();
-    html.find('.attr-block.bg-manualDROverride').closest('li').remove();
-  }, 0);
 }
-
 
 // Function to calculate DR from equipped armor
 function calculateActorDR(actor) {
@@ -483,7 +454,7 @@ function calculateActorDR(actor) {
 Hooks.on("preCreateActor", (document, data, options, userId) => {
   if (!game.settings.get(MODULE_ID, "enableCombatReloaded")) return;
   
-  // Initialize DR properties if they don't exist - set directly not as nested value
+  // Initialize DR properties if they don't exist
   if (!hasProperty(data, "system.attributes.damageReduction")) {
     document.updateSource({"system.attributes.damageReduction": 0});
   }
