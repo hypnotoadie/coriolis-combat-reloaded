@@ -75,6 +75,9 @@ Hooks.on("renderyzecoriolisActorSheet", (app, html, data) => {
   
   if (!game.settings.get(MODULE_ID, "enableCombatReloaded")) return;
   
+  // Clean up empty attribute blocks
+  cleanEmptyAttributes(html);
+  
   // Modify the armor section in character sheets
   modifyArmorSection(app, html, data);
   
@@ -130,6 +133,16 @@ Hooks.on("renderChatMessage", (message, html, data) => {
     }
   }
 });
+
+// Function to clean up empty attribute blocks
+function cleanEmptyAttributes(html) {
+  // Find the empty DR attribute block and hide it
+  const emptyDRBlock = html.find('.attr-block.bg-damageReduction');
+  if (emptyDRBlock.length) {
+    // Find the parent column and hide it
+    emptyDRBlock.closest('.attr-item').hide();
+  }
+}
 
 // Function to patch core coriolis roll evaluation
 function patchCoriolisRollEvaluation() {
@@ -295,18 +308,24 @@ function modifyWeaponSection(app, html, data) {
   const weaponHeader = html.find('.gear-category-header:contains("Weapons")').first();
   if (!weaponHeader.length) return;
   
-  // Get all the header name elements
+  // Properly reorder headers by finding each column we need
+  const headerRow = weaponHeader.children();
+  
+  // Find all gear-category-name elements
   const headerNames = weaponHeader.find('.gear-category-name');
   
-  // Check if AP column already exists
+  // Only proceed if we can find the right columns
+  if (headerNames.length < 6) return;
+  
+  // If AP column doesn't exist yet, we need to add it
   if (headerNames.filter(':contains("AP")').length === 0) {
-    // Find the crit column - we want to insert AP after this
-    const critColumn = headerNames.filter(':contains("Crit")').first();
+    // We need to insert AP in the right place - BEFORE Range
+    const rangeColumn = headerNames.filter(':contains("Range")').first();
     
-    if (critColumn.length) {
-      // Create AP column and insert after crit
+    if (rangeColumn.length) {
+      // Create AP column and insert before range
       const apColumn = $(`<div class="gear-category-name center">AP</div>`);
-      critColumn.after(apColumn);
+      rangeColumn.before(apColumn);
     }
   }
   
@@ -323,17 +342,19 @@ function modifyWeaponSection(app, html, data) {
     const itemRow = $(el).find('.gear-bg');
     const dataCells = itemRow.find('.gear-row-data');
     
-    // Check if we already added an AP cell
-    if (dataCells.length >= 5 && !$(el).find('.ap-cell').length) {
-      // The crit value is typically the 5th data cell (index 4)
-      const critCell = dataCells.eq(4);
+    // Check if AP column already exists for this item
+    if (!$(el).find('.ap-cell').length) {
+      // The range value is typically the 5th data cell (index 4)
+      const rangeCell = dataCells.filter(':contains("Short"), :contains("Medium"), :contains("Long"), :contains("Extreme")').first();
       
-      // Create AP cell with appropriate value
-      const apValue = item.system.armorPenetration !== undefined ? item.system.armorPenetration : 0;
-      const apCell = $(`<div class="gear-row-data ap-cell">${apValue}</div>`);
-      
-      // Insert after crit cell
-      critCell.after(apCell);
+      if (rangeCell.length) {
+        // Create AP cell with appropriate value
+        const apValue = item.system.armorPenetration !== undefined ? item.system.armorPenetration : 0;
+        const apCell = $(`<div class="gear-row-data ap-cell">${apValue}</div>`);
+        
+        // Insert before range cell
+        rangeCell.before(apCell);
+      }
     }
   });
 }
@@ -343,11 +364,14 @@ function modifyWeaponSheetDisplay(app, html, data) {
   // Only proceed if this is a weapon
   if (app.item.type !== "weapon") return;
   
+  // Remove any existing AP fields to avoid duplicates
+  html.find('.resource-label:contains("Armor Penetration")').closest('.resource').remove();
+  
   // Find the damage input field
   const damageField = html.find('.resource-label:contains("Damage")').closest('.resource');
   
-  // Add AP field after damage if it doesn't exist
-  if (damageField.length && !html.find('.resource-label:contains("Armor Penetration")').length) {
+  // Add AP field after damage
+  if (damageField.length) {
     // Get the current AP value safely
     let apValue = 0;
     if (app.item.system.armorPenetration !== undefined) {
