@@ -35,6 +35,10 @@ Hooks.once("init", () => {
 Hooks.on("renderyzecoriolisActorSheet", (app, html, data) => {
   if (!game.settings.get(MODULE_ID, "enableCombatReloaded")) return;
   
+  // Extend the actor sheet vertically to accommodate the new DR bar
+  const existingHeight = app.position.height;
+  app.setPosition({ height: existingHeight + 30 }); // Add 30px to account for the DR bar
+  
   // Modify the armor section in character sheets
   modifyArmorSection(app, html, data);
   
@@ -46,6 +50,32 @@ Hooks.on("renderyzecoriolisActorSheet", (app, html, data) => {
   
   // After adding the DR bar, add event listeners for hover effects
   addDRBarEventListeners(html);
+  
+  // Remove the entire attribute list items for DR attributes
+  // Find and remove damageReduction attribute items
+  html.find('.attr-block.bg-damageReduction').each(function() {
+    // Get the parent flexcol.attr-item
+    const attrItem = $(this).closest('.flexcol.attr-item');
+    if (attrItem.length) {
+      attrItem.remove();
+    }
+  });
+  
+  // Find and remove manualDROverride attribute items
+  html.find('.attr-block.bg-manualDROverride').each(function() {
+    // Get the parent flexcol.attr-item
+    const attrItem = $(this).closest('.flexcol.attr-item');
+    if (attrItem.length) {
+      attrItem.remove();
+    }
+  });
+  
+  // Remove any empty li elements in the attribute rows
+  html.find('.attribute-list li').each(function() {
+    if ($(this).children().length === 0 || $(this).html().trim() === '') {
+      $(this).remove();
+    }
+  });
 });
 
 // Add hover event listeners to the DR bar
@@ -140,14 +170,8 @@ Hooks.on("renderChatMessage", (message, html, data) => {
 Hooks.on("preUpdateActor", (actor, updateData, options, userId) => {
   if (!game.settings.get(MODULE_ID, "enableCombatReloaded")) return;
   
-  // If we're updating system data and there's no DR value set
-  if (updateData.system && !hasProperty(updateData.system, "attributes.damageReduction")) {
-    // Calculate DR from equipped armor
-    const calculatedDR = calculateActorDR(actor);
-    
-    // Set the DR attribute
-    setProperty(updateData.system, "attributes.damageReduction", calculatedDR);
-  }
+  // We're removing the automatic attribute creation
+  // DR will be calculated and displayed in the bar only
 });
 
 // Function to modify how armor works in combat rolls
@@ -355,10 +379,8 @@ function calculateActorDR(actor) {
 Hooks.on("preCreateActor", (document, data, options, userId) => {
   if (!game.settings.get(MODULE_ID, "enableCombatReloaded")) return;
   
-  // Initialize DR properties if they don't exist
-  if (!hasProperty(data, "system.attributes.damageReduction")) {
-    document.updateSource({"system.attributes.damageReduction": 0});
-  }
+  // We no longer need to initialize these properties since we're not using them directly
+  // The dr bar will use calculated values instead
 });
 
 // Function to modify chat messages for combat rolls
