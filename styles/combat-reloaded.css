@@ -105,3 +105,48 @@
   box-shadow: 0 0 5px rgba(30, 130, 30, 0.7);
   outline: none;
 }
+
+/* DR Bar styling */
+.dr-bar {
+  position: relative;
+  height: 15px;
+  flex: 1;
+  margin: 0 2px;
+  display: flex;
+}
+
+.dr-bar .bar-segment {
+  flex: 1;
+  margin: 0 1px;
+  height: 12px;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.dr-bar .bar-segment.on {
+  background-color: #3d8c40;
+  border: 1px solid #2a602c;
+}
+
+.dr-bar .bar-segment.off {
+  background-color: #4b4a44;
+  border: 1px solid #2a2a28;
+}
+
+.dr-bar .bar-value {
+  position: absolute;
+  right: 2px;
+  color: #fff;
+  text-shadow: 1px 1px 1px #000;
+  font-size: 10px;
+  top: -1px;
+}
+
+/* Hover states */
+.dr-bar .bar-segment.hover-to-increase {
+  background-color: #71cc75;
+}
+
+.dr-bar .bar-segment.hover-to-decrease {
+  background-color: #a14d4d;
+}

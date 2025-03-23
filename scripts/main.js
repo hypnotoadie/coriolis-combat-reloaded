@@ -437,29 +437,37 @@ function addManualDRToActorSheet(app, html, data) {
   // Get current values
   const actor = app.actor;
   const calculatedDR = calculateActorDR(actor);
-  
-  // Get the current DR value (may be manual or calculated)
-  const currentDR = actor.system.attributes?.damageReduction || 0;
+  const manualDR = actor.system.attributes?.manualDROverride;
+  const finalDR = (manualDR !== undefined && manualDR !== null) ? manualDR : calculatedDR;
   
   // Find the always-visible-stats section
   const statsSection = html.find('.always-visible-stats .perma-stats-list');
   if (!statsSection.length) return;
   
-  // First remove any existing DR entry to avoid duplicates
-  statsSection.find('.stat-label:contains("Damage Reduction")').closest('.entry').remove();
+  // Create the segments for the DR bar - max 10 segments
+  let drSegments = '';
+  const maxDR = 10;
   
-  // Create the DR entry with proper styling
+  for (let i = 0; i < maxDR; i++) {
+    const segmentClass = i < finalDR ? 'on' : 'off';
+    drSegments += `
+      <div class="bar-segment bar-rounded ${segmentClass}" 
+           data-name="system.attributes.damageReduction" 
+           data-index="${i}" 
+           data-current="${finalDR}" 
+           data-min="0" 
+           data-max="${maxDR}">
+      </div>
+    `;
+  }
+  
+  // Create the DR entry with the segmented bar
   const drEntry = `
     <li class="entry flexrow">
       <div class="stat-label">${game.i18n.localize("coriolis-combat-reloaded.labels.damageReduction")}</div>
-      <div class="number">
-        <input class="input-value dr-value" 
-               type="number" 
-               name="system.attributes.damageReduction" 
-               value="${currentDR}" 
-               min="0"
-               data-dtype="Number"
-               title="${game.i18n.localize("coriolis-combat-reloaded.tooltips.damageReduction")}" />
+      <div class="bar dr-bar fr-basic">
+        ${drSegments}
+        <span class="bar-value">${finalDR}</span>
       </div>
     </li>
   `;
@@ -472,6 +480,81 @@ function addManualDRToActorSheet(app, html, data) {
     // If can't find Radiation, just append to the end
     statsSection.append(drEntry);
   }
+  
+  // Add event listeners for the bar segments
+  html.find('.dr-bar .bar-segment').mouseenter(onHoverBarSegmentIn);
+  html.find('.dr-bar').mouseleave(onHoverBarOut);
+  html.find('.dr-bar .bar-segment').click(onClickDRBarSegment);
+}
+
+// Function to handle clicking on DR bar segments
+function onClickDRBarSegment(event) {
+  event.preventDefault();
+  const targetSegment = event.currentTarget;
+  
+  // Get the segment data
+  const index = Number(targetSegment.dataset.index);
+  const curValue = Number(targetSegment.dataset.current);
+  const minValue = Number(targetSegment.dataset.min);
+  const maxValue = Number(targetSegment.dataset.max);
+  
+  // Compute new value (similar to how databar.js does it)
+  let newValue = index;
+  if (index < curValue) {
+    // Clicking below current value
+    newValue = index;
+  } else if (index >= curValue) {
+    // Clicking at or above current value
+    newValue = index + 1;
+  }
+  
+  // Ensure value is within bounds
+  newValue = Math.max(minValue, Math.min(maxValue, newValue));
+  
+  // Get the actor from the closest actor sheet
+  const actorSheet = $(event.currentTarget).closest('.sheet.actor').data('actorSheet');
+  if (actorSheet && actorSheet.actor) {
+    // Update the actor's manualDROverride
+    actorSheet.actor.update({"system.attributes.manualDROverride": newValue});
+  }
+}
+
+// Functions borrowed from databar.js
+function onHoverBarSegmentIn(event) {
+  event.preventDefault();
+  const header = event.currentTarget;
+  const barClass = ".bar";
+  const segmentClass = ".bar-segment";
+  const currentValue = Number(header.dataset.current);
+  const hoverIndex = Number(header.dataset.index);
+  let increase = hoverIndex >= currentValue;
+  let barElement = $(header).parents(barClass);
+  barElement.find(segmentClass).each((i, div) => {
+    let bar = $(div);
+    const increaseClass = "hover-to-increase";
+    const decreaseClass = "hover-to-decrease";
+    bar.removeClass(increaseClass);
+    bar.removeClass(decreaseClass);
+    
+    if (increase && i <= hoverIndex && i >= currentValue) {
+      bar.addClass(increaseClass);
+    }
+
+    if (!increase && i >= hoverIndex && i < currentValue) {
+      bar.addClass(decreaseClass);
+    }
+  });
+}
+
+function onHoverBarOut(event) {
+  event.preventDefault();
+  $(event.currentTarget)
+    .find(".bar-segment")
+    .each((i, div) => {
+      let bar = $(div);
+      bar.removeClass("hover-to-increase");
+      bar.removeClass("hover-to-decrease");
+    });
 }
 
 // Extend actor preparation to include DR calculations
