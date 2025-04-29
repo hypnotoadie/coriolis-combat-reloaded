@@ -182,37 +182,8 @@ function patchCoriolisRollEvaluation() {
   // Only modify if needed for AP functionality
 }
 
-// Direct approach to register fields in the schema
 function registerExtraItemFields() {
-  // Ensure fields are registered on the Item prototype
-  const weaponFields = foundry.data.fields;
-  if (weaponFields) {
-    // Try to register the fields in different ways depending on Foundry version
-    try {
-      // For newer Foundry versions
-      const weaponSchema = game.system.model.Item.weapon;
-      if (weaponSchema) {
-        weaponSchema.armorPenetration = new weaponFields.NumberField({
-          required: false, 
-          initial: 0, 
-          nullable: false
-        });
-      }
-      
-      const armorSchema = game.system.model.Item.armor;
-      if (armorSchema) {
-        armorSchema.damageReduction = new weaponFields.NumberField({
-          required: false, 
-          initial: 0, 
-          nullable: false
-        });
-      }
-    } catch (error) {
-      console.warn("Could not register fields via model schema:", error);
-    }
-  }
-  
-  // Add our update hook for Item.prototype.prepareData
+  // Only use one approach - the prepareData hook is more reliable
   const originalPrepareData = CONFIG.Item.documentClass.prototype.prepareData;
   if (originalPrepareData && !CONFIG.Item.documentClass.prototype._hasReloadedHook) {
     CONFIG.Item.documentClass.prototype.prepareData = function() {
@@ -221,27 +192,34 @@ function registerExtraItemFields() {
       
       // Add our custom field logic for weapons
       if (this.type === "weapon") {
-        // If armorPenetration is undefined, null, or "null", set it to 0
-        if (this.system.armorPenetration === undefined || 
-            this.system.armorPenetration === null || 
-            this.system.armorPenetration === "null") {
-          this.system.armorPenetration = 0;
-        } else {
-          // Make sure it's a number
-          this.system.armorPenetration = Number(this.system.armorPenetration);
+        // Use getProperty and setProperty for safer data access/modification
+        let apValue = foundry.utils.getProperty(this, "system.armorPenetration");
+        
+        // Check if we need to initialize or convert the value
+        if (apValue === undefined || apValue === null || apValue === "null" || isNaN(apValue)) {
+          // Use setProperty instead of direct assignment
+          foundry.utils.setProperty(this, "system.armorPenetration", 0);
+        } else if (typeof apValue !== "number") {
+          // Only convert if it's not already a number
+          foundry.utils.setProperty(this, "system.armorPenetration", Number(apValue));
         }
       }
       
       // Add our custom field logic for armor
       if (this.type === "armor") {
-        // If damageReduction is undefined or null, set it to armorRating or 0
-        if (this.system.damageReduction === undefined || 
-            this.system.damageReduction === null || 
-            this.system.damageReduction === "null") {
-          this.system.damageReduction = this.system.armorRating || 0;
-        } else {
-          // Make sure it's a number
-          this.system.damageReduction = Number(this.system.damageReduction);
+        let drValue = foundry.utils.getProperty(this, "system.damageReduction");
+        let arValue = foundry.utils.getProperty(this, "system.armorRating");
+        
+        // Check if we need to initialize or convert the value
+        if (drValue === undefined || drValue === null || drValue === "null" || isNaN(drValue)) {
+          // Use a safe default based on armorRating or 0
+          const defaultValue = (arValue !== undefined && arValue !== null && !isNaN(arValue)) 
+            ? Number(arValue) : 0;
+            
+          foundry.utils.setProperty(this, "system.damageReduction", defaultValue);
+        } else if (typeof drValue !== "number") {
+          // Only convert if it's not already a number
+          foundry.utils.setProperty(this, "system.damageReduction", Number(drValue));
         }
       }
     };
@@ -249,6 +227,10 @@ function registerExtraItemFields() {
     // Mark that we've added our hook
     CONFIG.Item.documentClass.prototype._hasReloadedHook = true;
   }
+  
+  // Consider removing the schema modification approach entirely,
+  // or at least put it in a separate function that's only called
+  // when the system is initially loaded, not on every update
 }
 
 // Actor Sheet Changes for DR
