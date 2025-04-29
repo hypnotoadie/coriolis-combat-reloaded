@@ -6,8 +6,7 @@
   padding: 0 3px;
   border-radius: 3px;
   display: inline-block;
-  text-align: center;
-  min-width: 24px;
+  margin: 0 2px;
 }
 
 /* Armor Penetration styling */
@@ -24,147 +23,28 @@
   border: 1px solid #006600;
 }
 
-/* Add proper spacing in the weapon item rows */
-.gear-list .gear.item .ap-column {
-  flex: 0 0 40px;
-  text-align: center;
-}
-
-/* Add proper spacing in the armor item rows */
-.gear-list .gear.item .dr-column {
-  flex: 0 0 40px;
-  text-align: center;
-}
-
-/* Combat roll modifications in chat */
-.dice-roll .combat-stats {
-  margin: 5px 0;
-  padding: 5px;
-  border: 1px solid #4b4a44;
-  border-radius: 5px;
-  background: rgba(0, 0, 0, 0.1);
-}
-
-.combat-stats .ap-dr-row {
-  display: flex;
-  justify-content: space-between;
-}
-
-/* For the comparison of AP vs DR in combat results */
-.penetrating-damage {
-  color: #ff6666;
-}
-
-.reduced-damage {
-  color: #66ff66;
-}
-
-/* Weapon sheet additions */
-.weapon-sheet .ap-field {
+/* Styling for the AP field in weapon sheet */
+.ap-field {
   margin-top: 5px;
+  margin-bottom: 5px;
 }
 
-/* Armor sheet modifications */
-.armor-sheet .dr-field {
-  margin-top: 5px;
-}
-
-/* Combat card styling for AP and DR*/
-.card-ap, .card-dr {
+/* Styling for armor card elements */
+.card-damage-reduction {
   margin: 3px 0;
-  display: flex;
-  align-items: center;
 }
 
-.card-ap .label, .card-dr .label {
-  flex: 0 0 auto;
+.card-damage-reduction .label {
+  font-weight: bold;
   margin-right: 5px;
+}
+
+/* Styling for weapon card elements */
+.card-ap {
+  margin: 3px 0;
+}
+
+.card-ap .label {
   font-weight: bold;
-}
-
-.card-ap .value, .card-dr .value {
-  flex: 1;
-}
-
-/* Style for DR in always-visible stats */
-.always-visible-stats .dr-value {
-  font-weight: bold;
-  background-color: rgba(30, 130, 30, 0.2);
-  border: 1px solid #006600;
-  border-radius: 3px;
-  text-align: center;
-}
-
-/* Hover effect */
-.always-visible-stats .dr-value:hover {
-  background-color: rgba(30, 130, 30, 0.3);
-}
-
-/* Focus effect */
-.always-visible-stats .dr-value:focus {
-  box-shadow: 0 0 5px rgba(30, 130, 30, 0.7);
-  outline: none;
-}
-
-/* Make sure we properly define fr-basic if it's needed */
-.fr-basic {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
-  justify-content: flex-start;
-}
-
-.fr-basic .flex1 {
-  flex: 1;
-}
-/* Ensure the DR bar styling follows the radiation-bar pattern */
-.yzecoriolis.sheet.actor .always-visible-stats .perma-stats-list .entry .dr-bar.radiation-bar {
-  padding: 0px 5px 0px 5px;
-  border: 1px solid #a4a4a4;
-  border-radius: 5px;
-  background-color: rgba(113, 130, 190, 0.35);
-  height: 27px;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.yzecoriolis.sheet.actor .always-visible-stats .perma-stats-list .entry .dr-bar .bar-rounded {
-  border-radius: 2px;
-}
-
-.yzecoriolis.sheet.actor .always-visible-stats .perma-stats-list .entry .dr-bar .bar-pill {
-  border-radius: 40px;
-}
-
-.yzecoriolis.sheet.actor .always-visible-stats .perma-stats-list .entry .dr-bar .bar-segment {
-  box-sizing: border-box;
-  flex: 1 1 10px;
-  height: 17px;
-  margin: 3.5px 1px;
-  background-color: #000000;
-  transition: background-color 275ms ease, border 275ms ease;
-}
-
-.yzecoriolis.sheet.actor .always-visible-stats .perma-stats-list .entry .dr-bar .hover-to-decrease {
-  background-color: #732d3e !important;
-}
-
-.yzecoriolis.sheet.actor .always-visible-stats .perma-stats-list .entry .dr-bar .hover-to-increase {
-  border: 1px solid #3f82a7;
-}
-
-.yzecoriolis.sheet.actor .always-visible-stats .perma-stats-list .entry .dr-bar .bar-segment.on {
-  background-color: #3f82a7;
-}
-
-.yzecoriolis.sheet.actor .always-visible-stats .perma-stats-list .entry .dr-bar .bar-segment.on:hover {
-  transform: scale(1.05);
-}
-
-.yzecoriolis.sheet.actor .always-visible-stats .perma-stats-list .entry .dr-bar .bar-segment.off {
-  background-color: #000000;
-}
-
-.yzecoriolis.sheet.actor .always-visible-stats .perma-stats-list .entry .dr-bar .bar-segment.off:hover {
-  transform: scale(1.05);
+  margin-right: 5px;
 }
