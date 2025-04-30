@@ -29,8 +29,13 @@
   margin-bottom: 5px;
 }
 
-/* Hide any duplicate AP fields that might get added */
-.ap-field + .ap-field {
+/* Ensure we don't see duplicate fields */
+input[name="system.armorPenetration"] ~ input[name="system.armorPenetration"] {
+  display: none !important;
+}
+
+/* Hide duplicate AP fields by class as well */
+.ap-field ~ .ap-field {
   display: none !important;
 }
 
@@ -54,12 +59,24 @@
   margin-right: 5px;
 }
 
-/* Fix for armor rating input to ensure it uses damageReduction */
-input[name="system.armorRating"] + input[name="system.damageReduction"] {
-  display: none;
+/* Chat card styling */
+.dice-roll tr .ap-value {
+  display: inline-block;
+  padding: 2px 5px;
+  margin: 0 2px;
 }
 
-/* Remove any duplicate AP fields */
-input[name="system.armorPenetration"] ~ input[name="system.armorPenetration"] {
-  display: none;
+/* Combat roll modifications in chat */
+.dice-roll .combat-stats {
+  margin: 5px 0;
+  padding: 5px;
+  border: 1px solid #4b4a44;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* Make AP and DR values stand out more in chat */
+.chat-message .ap-value, 
+.chat-message .dr-value {
+  font-size: 110%;
 }
