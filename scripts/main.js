@@ -51,76 +51,116 @@ function initializeItemFields() {
   });
 }
 
-// Patch the Coriolis roll system to include AP in weapon rolls
+// Completely rewritten patch for Coriolis roll system
 function patchCoriolisRoll() {
-  // Only patch if the coriolis roll function exists
-  if (typeof game.yzecoriolis?.coriolisRoll === "function") {
-    const originalCoriolisRoll = game.yzecoriolis.coriolisRoll;
+  // Only patch if the coriolis roll module exists
+  if (!game.yzecoriolis || typeof game.yzecoriolis.coriolisRoll !== "function") {
+    console.log("Combat Reloaded: Could not find Coriolis roll function to patch");
+    return;
+  }
+  
+  // Store the original coriolisRoll function
+  const originalCoriolisRoll = game.yzecoriolis.coriolisRoll;
+  
+  // Replace with our patched version
+  game.yzecoriolis.coriolisRoll = async function(chatOptions, rollData) {
+    // If this is a weapon roll, make sure to include AP value
+    if (rollData.rollType === "weapon") {
+      // Get the actor
+      const actor = game.actors.get(chatOptions.speaker.actor);
+      if (actor) {
+        // Find the weapon being used based on roll title
+        const weaponName = rollData.rollTitle;
+        const weapon = actor.items.find(i => i.type === "weapon" && i.name === weaponName);
+        
+        if (weapon) {
+          // Get AP value from weapon
+          const apValue = weapon.system.armorPenetration !== undefined ? weapon.system.armorPenetration : 0;
+          
+          // Set AP value in roll data
+          rollData.armorPenetration = apValue;
+          console.log(`Including AP ${apValue} for weapon ${weaponName} in roll data`);
+        }
+      }
+    }
     
-    // Replace with our patched version
-    game.yzecoriolis.coriolisRoll = function(chatOptions, rollData) {
-      // If this is a weapon roll, make sure to include AP value
-      if (rollData.rollType === "weapon") {
-        // Get the actor
+    // Call the original roll function
+    return await originalCoriolisRoll(chatOptions, rollData);
+  };
+  
+  console.log("Combat Reloaded: Successfully patched coriolisRoll function");
+  
+  // Additionally patch the module that processes weapon rolls
+  if (typeof game.yzecoriolis.CoriolisModifierDialog === "function") {
+    const originalDialog = game.yzecoriolis.CoriolisModifierDialog;
+    
+    // Create a wrapped version
+    game.yzecoriolis.CoriolisModifierDialog = function(rollData, chatOptions) {
+      // If this is a weapon roll, make sure AP is included
+      if (rollData.rollType === "weapon" && rollData.armorPenetration === undefined) {
+        // Attempt to get the weapon
         const actor = game.actors.get(chatOptions.speaker.actor);
         if (actor) {
-          // Find the weapon being used based on roll title
           const weaponName = rollData.rollTitle;
           const weapon = actor.items.find(i => i.type === "weapon" && i.name === weaponName);
           
-          if (weapon && weapon.system.armorPenetration !== undefined) {
-            // Set AP value in roll data
-            rollData.armorPenetration = weapon.system.armorPenetration;
-            console.log(`Including AP ${rollData.armorPenetration} for weapon ${weaponName} in roll data`);
+          if (weapon) {
+            rollData.armorPenetration = weapon.system.armorPenetration || 0;
+            console.log(`CoriolisModifierDialog: Added AP ${rollData.armorPenetration} from weapon ${weaponName}`);
           }
         }
       }
       
-      // Call the original roll function
-      return originalCoriolisRoll(chatOptions, rollData);
+      // Call the original constructor
+      return originalDialog.call(this, rollData, chatOptions);
     };
     
-    console.log("Combat Reloaded: Successfully patched coriolisRoll function");
+    // Make sure prototype chain is preserved
+    game.yzecoriolis.CoriolisModifierDialog.prototype = originalDialog.prototype;
+    
+    console.log("Combat Reloaded: Successfully patched CoriolisModifierDialog");
   }
   
   // Patch the chat message creation for weapon rolls
-  if (typeof ChatMessage.create === "function") {
-    const originalCreateChatMessage = ChatMessage.create;
-    
-    ChatMessage.create = async function(data, options) {
-      // Check if this is a weapon roll result
-      if (data.content && data.content.includes("weapon-roll") && data.flags?.yzecoriolis?.results) {
-        const results = data.flags.yzecoriolis.results;
+  const originalCreateChatMessage = ChatMessage.create;
+  
+  ChatMessage.create = async function(data, options) {
+    // Check if this is a weapon roll result
+    if (data.flags?.yzecoriolis?.results?.rollData?.rollType === "weapon") {
+      const results = data.flags.yzecoriolis.results;
+      
+      // If the roll data has AP, make sure it appears in the message content
+      if (results.rollData.armorPenetration !== undefined) {
+        const apValue = results.rollData.armorPenetration;
         
-        // If the roll data has AP, make sure it appears in the message content
-        if (results.rollData && results.rollData.armorPenetration !== undefined) {
-          const ap = results.rollData.armorPenetration;
-          
-          // Add AP to the damage row if it doesn't already exist
-          if (!data.content.includes('class="ap-value"')) {
-            const damageRowIndex = data.content.indexOf('Damage:');
-            if (damageRowIndex !== -1) {
-              const endOfRow = data.content.indexOf('</tr>', damageRowIndex);
-              if (endOfRow !== -1) {
-                const apRow = `
-                  <tr>
-                    <td>AP:</td>
-                    <td><span class="ap-value">${ap}</span></td>
-                  </tr>
-                `;
-                data.content = data.content.substring(0, endOfRow + 5) + apRow + data.content.substring(endOfRow + 5);
-              }
+        // If content exists and doesn't already include AP value
+        if (data.content && !data.content.includes('class="ap-value"')) {
+          // Find damage row
+          const damageRowIndex = data.content.indexOf('Damage:');
+          if (damageRowIndex !== -1) {
+            const endOfRow = data.content.indexOf('</tr>', damageRowIndex);
+            if (endOfRow !== -1) {
+              // Create AP row
+              const apRow = `
+                <tr>
+                  <td>${game.i18n.localize("coriolis-combat-reloaded.labels.ap")}:</td>
+                  <td><span class="ap-value">${apValue}</span></td>
+                </tr>
+              `;
+              
+              // Insert after damage row
+              data.content = data.content.substring(0, endOfRow + 5) + apRow + data.content.substring(endOfRow + 5);
             }
           }
         }
       }
-      
-      // Call the original create function
-      return originalCreateChatMessage.call(this, data, options);
-    };
+    }
     
-    console.log("Combat Reloaded: Successfully patched ChatMessage.create");
-  }
+    // Call the original create function
+    return originalCreateChatMessage.call(this, data, options);
+  };
+  
+  console.log("Combat Reloaded: Successfully patched ChatMessage.create");
 }
 
 // Hook into item sheet rendering
@@ -138,7 +178,7 @@ Hooks.on("renderyzecoriolisItemSheet", (app, html, data) => {
   }
 });
 
-// Add AP field to weapon sheet - Complete rewrite to fix duplication
+// Fixed addAPToWeaponSheet function - styling fixes
 function addAPFieldToWeaponSheet(app, html, data) {
   // First check if the form has our module flag to prevent multiple runs
   if (html.data('ap-processed')) {
@@ -171,8 +211,9 @@ function addAPFieldToWeaponSheet(app, html, data) {
   
   if (insertAfter.length) {
     // Create AP field HTML with a unique ID to make it easier to find
+    // Add numeric-input class to match other fields
     const apField = `
-      <div class="resource ap-field" id="ap-field-${app.item.id}">
+      <div class="resource numeric-input flexrow ap-field" id="ap-field-${app.item.id}">
         <label class="resource-label">${game.i18n.localize("coriolis-combat-reloaded.labels.armorPenetration")}</label>
         <input type="number" name="system.armorPenetration" value="${apValue}" data-dtype="Number">
       </div>
@@ -268,9 +309,31 @@ function replaceARWithDROnArmorSheet(app, html, data) {
 Hooks.on("renderChatMessage", (message, html, data) => {
   if (!game.settings.get(MODULE_ID, "enableCombatReloaded")) return;
   
-  // Check if this is a weapon roll
-  if (message.rolls?.length > 0 && message.flags?.yzecoriolis?.results?.rollData?.rollType === "weapon") {
-    addAPToWeaponRollChat(message, html, data);
+  // Check if this is a weapon roll and doesn't already have AP value
+  if (message.flags?.yzecoriolis?.results?.rollData?.rollType === "weapon" && 
+      !html.find('.ap-value').length) {
+    // Get the roll data
+    const rollData = message.flags.yzecoriolis.results.rollData;
+    
+    // If AP value exists in roll data
+    if (rollData.armorPenetration !== undefined) {
+      const apValue = rollData.armorPenetration;
+      
+      // Find damage row to add AP after
+      const damageRow = html.find('tr:contains("Damage:")');
+      if (damageRow.length) {
+        // Create AP row HTML
+        const apRow = `
+          <tr>
+            <td>${game.i18n.localize("coriolis-combat-reloaded.labels.ap")}:</td>
+            <td><span class="ap-value">${apValue}</span></td>
+          </tr>
+        `;
+        
+        // Insert after damage row
+        $(apRow).insertAfter(damageRow);
+      }
+    }
   }
   
   // Check if this is an item card for armor or weapon
@@ -294,48 +357,6 @@ Hooks.on("renderChatMessage", (message, html, data) => {
     }
   }
 });
-
-// Add AP to weapon roll chat message
-function addAPToWeaponRollChat(message, html, data) {
-  // Check if AP is already displayed
-  if (html.find('.ap-value').length > 0) return;
-  
-  // Get the weapon's AP value
-  let apValue = 0;
-  
-  const results = message.getFlag("yzecoriolis", "results");
-  if (results && results.rollData) {
-    // Try to get AP from roll data
-    apValue = results.rollData.armorPenetration || 0;
-    
-    // If AP is not in roll data, try to get from actor's weapon
-    if ((!apValue && apValue !== 0) && results.rollData.rollTitle) {
-      const actor = game.actors.get(message.speaker.actor);
-      if (actor) {
-        const weaponName = results.rollData.rollTitle;
-        const weapon = actor.items.find(i => i.type === "weapon" && i.name === weaponName);
-        if (weapon) {
-          apValue = weapon.system.armorPenetration || 0;
-        }
-      }
-    }
-  }
-  
-  // Find where to insert the AP value (after damage)
-  const damageElement = html.find('tr:contains("Damage:")');
-  if (damageElement.length) {
-    // Create AP row HTML
-    const apRow = `
-      <tr>
-        <td>${game.i18n.localize("coriolis-combat-reloaded.labels.ap")}:</td>
-        <td><span class="ap-value">${apValue}</span></td>
-      </tr>
-    `;
-    
-    // Insert after damage row
-    $(apRow).insertAfter(damageElement);
-  }
-}
 
 // Add AP to weapon item card
 function addAPToWeaponItemCard(weapon, html) {
@@ -413,6 +434,21 @@ Hooks.on("createItem", (item, options, userId) => {
   if (item.type === "armor" && item.system.damageReduction === undefined) {
     const armorRating = item.system.armorRating || 0;
     item.update({"system.damageReduction": armorRating});
+  }
+});
+
+// Also initialize when actor items are created
+Hooks.on("preCreateItem", (item, data, options, userId) => {
+  if (!game.settings.get(MODULE_ID, "enableCombatReloaded")) return;
+  
+  // Initialize new items
+  if (data.type === "weapon" && data.system?.armorPenetration === undefined) {
+    item.updateSource({"system.armorPenetration": 0});
+  }
+  
+  if (data.type === "armor" && data.system?.damageReduction === undefined) {
+    const armorRating = data.system?.armorRating || 0;
+    item.updateSource({"system.damageReduction": armorRating});
   }
 });
 

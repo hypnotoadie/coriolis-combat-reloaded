@@ -23,10 +23,26 @@
   border: 1px solid #006600;
 }
 
-/* Styling for the AP field in weapon sheet */
-.ap-field {
-  margin-top: 5px;
-  margin-bottom: 5px;
+/* Make the AP field match other resource flexrow inputs */
+.resource.ap-field {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.resource.ap-field input {
+  height: 24px;
+  flex: 0 0 60px;
+  margin-left: 8px;
+}
+
+/* Make the AP field label match other labels */
+.resource.ap-field .resource-label {
+  flex: 1;
+  margin: 0;
+  font-weight: bold;
+  font-size: 13px;
 }
 
 /* Ensure we don't see duplicate fields */
@@ -79,4 +95,22 @@ input[name="system.armorPenetration"] ~ input[name="system.armorPenetration"] {
 .chat-message .ap-value, 
 .chat-message .dr-value {
   font-size: 110%;
+}
+
+/* Make sure AP appears in the same format as other values in chat */
+.dice-roll tr td .ap-value {
+  font-family: "Roboto", sans-serif;
+  background-color: rgba(180, 30, 30, 0.7);
+  border: 1px solid #990000;
+  border-radius: 3px;
+  padding: 2px 5px;
+  margin: 0 2px;
+  display: inline-block;
+}
+
+/* Format the DR field properly in armor sheets */
+input#dr-field {
+  width: 60px;
+  flex: 0 0 60px;
+  height: 24px;
 }
