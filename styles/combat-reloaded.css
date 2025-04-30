@@ -29,6 +29,11 @@
   margin-bottom: 5px;
 }
 
+/* Hide any duplicate AP fields that might get added */
+.ap-field + .ap-field {
+  display: none !important;
+}
+
 /* Styling for armor card elements */
 .card-damage-reduction {
   margin: 3px 0;
@@ -47,4 +52,14 @@
 .card-ap .label {
   font-weight: bold;
   margin-right: 5px;
+}
+
+/* Fix for armor rating input to ensure it uses damageReduction */
+input[name="system.armorRating"] + input[name="system.damageReduction"] {
+  display: none;
+}
+
+/* Remove any duplicate AP fields */
+input[name="system.armorPenetration"] ~ input[name="system.armorPenetration"] {
+  display: none;
 }
