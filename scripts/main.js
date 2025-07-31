@@ -92,11 +92,58 @@ Hooks.on("renderyzecoriolisActorSheet", (app, html, data) => {
 });
 
 // Hook: Add AP to weapon roll chat messages
-Hooks.on("renderChatMessage", (message, html, data) => {
+// updated to remove jQuery dependency
+
+Hooks.on("renderChatMessageHTML", (message, html, data) => {
   if (!game.settings.get(MODULE_ID, "enableCombatReloaded")) return;
   
   addAPToChatMessage(message, html);
 });
+
+// Updated addAPToChatMessage function (no jQuery)
+function addAPToChatMessage(message, html) {
+  // Check if this is a weapon roll
+  const isWeaponRoll = message.flags?.yzecoriolis?.results?.rollData?.rollType === "weapon";
+  
+  if (!isWeaponRoll) return;
+  
+  // Check if AP is already displayed (using vanilla JS instead of jQuery)
+  if (html.querySelector('.ap-chat-value')) return;
+  
+  // Get AP value from roll data or actor
+  let apValue = 0;
+  const rollData = message.flags.yzecoriolis.results.rollData;
+  
+  if (rollData.armorPenetration !== undefined) {
+    apValue = rollData.armorPenetration;
+  } else if (message.speaker.actor) {
+    // Try to get from actor's weapon
+    const actor = game.actors.get(message.speaker.actor);
+    if (actor) {
+      const weaponName = rollData.rollTitle;
+      const weapon = actor.items.find(i => i.type === "weapon" && i.name === weaponName);
+      if (weapon) {
+        apValue = weapon.system.armorPenetration || 0;
+      }
+    }
+  }
+  
+  // Find where to insert AP (after damage row) - using vanilla JS
+  const damageRow = html.querySelector('tr:has(td:contains("Damage:"))') || 
+                   Array.from(html.querySelectorAll('tr')).find(row => 
+                     row.textContent.includes('Damage:'));
+  
+  if (damageRow) {
+    const apRow = document.createElement('tr');
+    apRow.innerHTML = `
+      <td colspan="2">
+        ${game.i18n.localize("coriolis-combat-reloaded.labels.armorPenetration")}: 
+        <span class="ap-chat-value">${apValue}</span>
+      </td>
+    `;
+    damageRow.insertAdjacentElement('afterend', apRow);
+  }
+}
 
 // Hook into form submission to preserve values
 function hookItemSheetSubmission() {
@@ -142,22 +189,26 @@ function hookItemSheetSubmission() {
 }
 
 
+// Updated to remove jQuery dependency
 // Function to add AP field to weapon item sheets
 function addAPFieldToWeaponSheet(app, html) {
   console.log("Combat Reloaded: Adding AP field to weapon:", app.item.name);
-  console.log("Combat Reloaded: Item type:", app.item.type);
+  
+  // Convert html to HTMLElement if it's jQuery
+  const htmlElement = html instanceof HTMLElement ? html : html[0];
   
   // Prevent duplicate processing
-  if (html.data('ap-processed')) {
+  if (htmlElement.dataset.apProcessed) {
     console.log("Combat Reloaded: Already processed, skipping");
     return;
   }
-  html.data('ap-processed', true);
+  htmlElement.dataset.apProcessed = "true";
   
   // Remove any existing AP fields first
-  html.find('.ap-field').remove();
+  const existingFields = htmlElement.querySelectorAll('.ap-field');
+  existingFields.forEach(field => field.remove());
   
-  // Get current AP value with extensive logging
+  // Get current AP value
   let apValue = app.item.system.armorPenetration;
   console.log("Combat Reloaded: Raw AP value:", apValue, "Type:", typeof apValue);
   
@@ -165,67 +216,43 @@ function addAPFieldToWeaponSheet(app, html) {
   if (apValue === undefined || apValue === null) {
     console.log("Combat Reloaded: AP value is undefined/null, initializing to 0");
     apValue = 0;
-    // Initialize the field in the item data
     app.item.update({"system.armorPenetration": 0});
   } else {
     console.log("Combat Reloaded: Using existing AP value:", apValue);
     apValue = Number(apValue) || 0;
   }
   
-  // Try multiple ways to find where to insert the AP field
+  // Find where to insert the AP field
   let insertionPoint = null;
   
-  // First try: look for damage field
-  const damageField = html.find('input[name="system.damage"]').closest('.resource');
-  if (damageField.length) {
-    insertionPoint = damageField;
-    console.log("Combat Reloaded: Found damage field via input name");
-  }
+  // Try multiple approaches to find the damage field
+  insertionPoint = htmlElement.querySelector('input[name="system.damage"]')?.closest('.resource') ||
+                  Array.from(htmlElement.querySelectorAll('.resource-label')).find(label => 
+                    label.textContent.includes('Damage'))?.closest('.resource') ||
+                  htmlElement.querySelector('.resource');
   
-  // Second try: look for label containing "Damage"
-  if (!insertionPoint) {
-    const damageLabel = html.find('.resource-label:contains("Damage")').closest('.resource');
-    if (damageLabel.length) {
-      insertionPoint = damageLabel;
-      console.log("Combat Reloaded: Found damage field via label");
-    }
-  }
-  
-  // Third try: look for any field in the form
-  if (!insertionPoint) {
-    const firstResource = html.find('.resource').first();
-    if (firstResource.length) {
-      insertionPoint = firstResource;
-      console.log("Combat Reloaded: Using first resource field as insertion point");
-    }
-  }
-  
-  if (insertionPoint && insertionPoint.length) {
+  if (insertionPoint) {
     console.log("Combat Reloaded: Inserting AP field");
     
-    const apFieldHTML = `
-      <div class="resource numeric-input flexrow ap-field" id="ap-field-${app.item.id}">
-        <label class="resource-label">${game.i18n.localize("coriolis-combat-reloaded.labels.armorPenetration")}</label>
-        <input type="number" name="system.armorPenetration" value="${apValue}" data-dtype="Number" min="0" class="ap-input">
-      </div>
+    const apField = document.createElement('div');
+    apField.className = 'resource numeric-input flexrow ap-field';
+    apField.id = `ap-field-${app.item.id}`;
+    apField.innerHTML = `
+      <label class="resource-label">${game.i18n.localize("coriolis-combat-reloaded.labels.armorPenetration")}</label>
+      <input type="number" name="system.armorPenetration" value="${apValue}" data-dtype="Number" min="0" class="ap-input">
     `;
     
-    $(apFieldHTML).insertAfter(insertionPoint);
+    insertionPoint.insertAdjacentElement('afterend', apField);
     
-    // Verify the field was added
-    const addedField = html.find('.ap-field');
-    console.log("Combat Reloaded: AP field added successfully:", addedField.length > 0);
+    // Add event handlers (using vanilla JS)
+    const apInput = apField.querySelector('.ap-input');
     
-    // Add event handlers
-    const apInput = html.find(`#ap-field-${app.item.id} .ap-input`);
-    apInput.off('change.combat-reloaded blur.combat-reloaded');
-    
-    apInput.on('change.combat-reloaded blur.combat-reloaded', function(event) {
-      const inputVal = $(this).val();
+    const handleAPChange = function(event) {
+      const inputVal = event.target.value;
       console.log("Combat Reloaded: AP input changed to:", inputVal);
       
       if (inputVal === "") {
-        $(this).val(0);
+        event.target.value = 0;
         app.item.update({"system.armorPenetration": 0});
         return;
       }
@@ -233,34 +260,40 @@ function addAPFieldToWeaponSheet(app, html) {
       const numVal = Number(inputVal);
       if (isNaN(numVal)) {
         console.log("Combat Reloaded: Invalid AP number, reverting");
-        $(this).val(app.item.system.armorPenetration || 0);
+        event.target.value = app.item.system.armorPenetration || 0;
         return;
       }
       
       const finalValue = Math.max(0, Math.floor(numVal));
       console.log("Combat Reloaded: Updating AP to:", finalValue);
-      $(this).val(finalValue);
+      event.target.value = finalValue;
       app.item.update({"system.armorPenetration": finalValue});
-    });
+    };
     
+    apInput.addEventListener('change', handleAPChange);
+    apInput.addEventListener('blur', handleAPChange);
+    
+    console.log("Combat Reloaded: AP field added successfully");
   } else {
     console.log("Combat Reloaded: Could not find insertion point for AP field");
-    console.log("Combat Reloaded: Available resources:", html.find('.resource').length);
-    console.log("Combat Reloaded: HTML structure:", html.find('.sheet-body').html());
   }
 }
 
-// Function to replace AR with DR on armor item sheets
+
+// Updated to remove jQuery dependency
+// Function to replace Armor Rating with Damage Reduction on armor sheets
 function replaceARWithDROnArmorSheet(app, html) {
   console.log("Combat Reloaded: Processing armor sheet:", app.item.name);
-  console.log("Combat Reloaded: Item type:", app.item.type);
+  
+  // Convert html to HTMLElement if it's jQuery
+  const htmlElement = html instanceof HTMLElement ? html : html[0];
   
   // Prevent duplicate processing
-  if (html.data('dr-processed')) {
+  if (htmlElement.dataset.drProcessed) {
     console.log("Combat Reloaded: Already processed DR, skipping");
     return;
   }
-  html.data('dr-processed', true);
+  htmlElement.dataset.drProcessed = "true";
   
   // Get current values
   const armorRating = app.item.system.armorRating || 0;
@@ -275,151 +308,138 @@ function replaceARWithDROnArmorSheet(app, html) {
     app.item.update({"system.damageReduction": damageReduction});
   }
   
-  // Try multiple ways to find the armor rating field
-  let armorField = null;
+  // Find the armor rating field
+  let armorField = htmlElement.querySelector('input[name="system.armorRating"]')?.closest('.resource') ||
+                  Array.from(htmlElement.querySelectorAll('.resource-label')).find(label => 
+                    label.textContent.includes('Armor Rating'))?.closest('.resource') ||
+                  Array.from(htmlElement.querySelectorAll('.resource-label')).find(label => 
+                    label.textContent.includes('Armor'))?.closest('.resource');
   
-  // First try: input name
-  armorField = html.find('input[name="system.armorRating"]').closest('.resource');
-  if (armorField.length) {
-    console.log("Combat Reloaded: Found AR field via input name");
-  }
-  
-  // Second try: label text
-  if (!armorField || !armorField.length) {
-    armorField = html.find('.resource-label:contains("Armor Rating")').closest('.resource');
-    if (armorField.length) {
-      console.log("Combat Reloaded: Found AR field via label");
-    }
-  }
-  
-  // Third try: any label containing "Armor"
-  if (!armorField || !armorField.length) {
-    armorField = html.find('.resource-label:contains("Armor")').closest('.resource');
-    if (armorField.length) {
-      console.log("Combat Reloaded: Found armor field via partial label");
-    }
-  }
-  
-  if (armorField && armorField.length) {
+  if (armorField) {
     console.log("Combat Reloaded: Converting AR field to DR field");
     
     // Change the label
-    armorField.find('.resource-label').text(
-      game.i18n.localize("coriolis-combat-reloaded.labels.damageReduction")
-    );
+    const label = armorField.querySelector('.resource-label');
+    if (label) {
+      label.textContent = game.i18n.localize("coriolis-combat-reloaded.labels.damageReduction");
+    }
     
     // Update the input
-    const input = armorField.find('input');
-    input.attr('name', 'system.damageReduction');
-    input.val(damageReduction);
-    
-    console.log("Combat Reloaded: DR field conversion completed");
-    
-    // Add change handler for syncing
-    input.off('change.combat-reloaded blur.combat-reloaded');
-    input.on('change.combat-reloaded blur.combat-reloaded', function() {
-      const val = $(this).val();
-      const numVal = Number(val) || 0;
-      const finalVal = Math.max(0, numVal);
+    const input = armorField.querySelector('input');
+    if (input) {
+      input.name = 'system.damageReduction';
+      input.value = damageReduction;
       
-      console.log("Combat Reloaded: DR changed to:", finalVal);
+      console.log("Combat Reloaded: DR field conversion completed");
       
-      // Update both DR and AR
-      app.item.update({
-        "system.damageReduction": finalVal,
-        "system.armorRating": finalVal
-      });
-    });
-    
+      // Add change handler
+      const handleDRChange = function(event) {
+        const val = event.target.value;
+        const numVal = Number(val) || 0;
+        const finalVal = Math.max(0, numVal);
+        
+        console.log("Combat Reloaded: DR changed to:", finalVal);
+        
+        // Update both DR and AR
+        app.item.update({
+          "system.damageReduction": finalVal,
+          "system.armorRating": finalVal
+        });
+      };
+      
+      input.addEventListener('change', handleDRChange);
+      input.addEventListener('blur', handleDRChange);
+    }
   } else {
     console.log("Combat Reloaded: Could not find AR field to convert");
-    console.log("Combat Reloaded: Available resources:", html.find('.resource').length);
-    console.log("Combat Reloaded: Available labels:", html.find('.resource-label').map((i, el) => $(el).text()).get());
   }
 }
 
+// Updated to remove jQuery dependency
 // Function to modify armor display on actor sheets
-function modifyArmorDisplayOnActorSheet(app, html) {
-  html.find('.gear.item').each((i, el) => {
-    const itemId = el.dataset.itemId;
-    if (!itemId) return;
-    
-    const item = app.actor.items.get(itemId);
-    if (item?.type === "armor") {
-      // Replace armor rating display with DR
-      const armorRatingDisplay = $(el).find('.gear-row-data').first();
-      if (armorRatingDisplay.length) {
-        const drValue = item.system.damageReduction || item.system.armorRating || 0;
-        armorRatingDisplay.html(`<span class="dr-value">${drValue}</span>`);
-      }
-    }
-  });
-}
-
-// Debug version to understand the actor sheet structure
 function modifyWeaponDisplayOnActorSheet(app, html) {
-  console.log("Combat Reloaded: === DEBUGGING ACTOR SHEET STRUCTURE ===");
+  console.log("Combat Reloaded: Modifying actor sheet weapon display");
   
-  // Find the weapons section
-  const weaponsHeader = html.find('.gear-category-name:contains("Weapons")').closest('.gear-category-header');
-  if (weaponsHeader.length) {
-    console.log("Combat Reloaded: Found weapons header");
-    
-    // Log all the header columns
-    const headerColumns = weaponsHeader.find('.gear-category-name');
-    console.log("Combat Reloaded: Header has", headerColumns.length, "columns:");
-    headerColumns.each((i, col) => {
-      console.log("Combat Reloaded: Header column", i, ":", $(col).text().trim());
-    });
-    
-    // Replace Initiative with AP
-    const initiativeHeader = headerColumns.filter(':contains("Initiative")');
-    if (initiativeHeader.length) {
-      console.log("Combat Reloaded: Replacing Initiative header with AP");
-      initiativeHeader.text("AP");
+  // Convert html to HTMLElement if it's jQuery
+  const htmlElement = html instanceof HTMLElement ? html : html[0];
+  
+  // STEP 1: Replace "Initiative" with "AP" in the weapons header
+  const weaponsHeaders = htmlElement.querySelectorAll('.gear-category-header .gear-category-name');
+  for (const header of weaponsHeaders) {
+    if (header.textContent.trim() === "Initiative") {
+      console.log("Combat Reloaded: Found Initiative header, replacing with AP");
+      header.textContent = "AP";
+      break;
     }
   }
   
-  // Find and analyze weapon rows
-  html.find('.gear.item').each((i, el) => {
+  // STEP 2: Update each weapon row to show AP value
+  const gearItems = htmlElement.querySelectorAll('.gear.item');
+  for (const el of gearItems) {
     const itemId = el.dataset.itemId;
-    if (!itemId) return;
+    if (!itemId) continue;
     
     const item = app.actor.items.get(itemId);
     if (item?.type === "weapon") {
-      console.log("Combat Reloaded: === WEAPON ROW DEBUG ===");
-      console.log("Combat Reloaded: Weapon:", item.name);
-      console.log("Combat Reloaded: AP Value:", item.system.armorPenetration || 0);
+      console.log("Combat Reloaded: Processing weapon:", item.name);
       
-      // Log the structure of this weapon row
-      const gearBg = $(el).find('.gear-bg');
-      console.log("Combat Reloaded: Gear-bg elements:", gearBg.length);
+      const apValue = item.system.armorPenetration || 0;
+      const rowDataElements = el.querySelectorAll('.gear-row-data');
       
-      const rowData = gearBg.find('.gear-row-data');
-      console.log("Combat Reloaded: Row data elements:", rowData.length);
-      
-      rowData.each((index, column) => {
-        const columnText = $(column).text().trim();
-        const columnHtml = $(column).html();
-        console.log("Combat Reloaded: Column", index, "text:", columnText, "html:", columnHtml);
-      });
-      
-      // Try to replace the initiative column (assuming it's index 1)
-      if (rowData.length > 1) {
-        const apValue = item.system.armorPenetration || 0;
-        const targetColumn = $(rowData[1]); // 2nd column (0-indexed)
+      if (rowDataElements.length > 1) {
+        // The Initiative column should be the 2nd column (index 1)
+        const initiativeColumn = rowDataElements[1];
+        initiativeColumn.innerHTML = `<span class="ap-value-display">${apValue}</span>`;
         
-        console.log("Combat Reloaded: Setting column 1 to AP value:", apValue);
-        targetColumn.html(`<span class="ap-value-display">${apValue}</span>`);
-        targetColumn.addClass('ap-column');
+        console.log("Combat Reloaded: Set AP value", apValue, "for weapon", item.name);
       }
-      
-      console.log("Combat Reloaded: === END WEAPON ROW DEBUG ===");
     }
-  });
-  
-  console.log("Combat Reloaded: === END ACTOR SHEET STRUCTURE DEBUG ===");
+  }
 }
+
+
+// Updated to remove jQuery dependency
+// Function to modify weapon display on actor sheets
+function modifyWeaponDisplayOnActorSheet(app, html) {
+  console.log("Combat Reloaded: Modifying actor sheet weapon display");
+  
+  // Convert html to HTMLElement if it's jQuery
+  const htmlElement = html instanceof HTMLElement ? html : html[0];
+  
+  // STEP 1: Replace "Initiative" with "AP" in the weapons header
+  const weaponsHeaders = htmlElement.querySelectorAll('.gear-category-header .gear-category-name');
+  for (const header of weaponsHeaders) {
+    if (header.textContent.trim() === "Initiative") {
+      console.log("Combat Reloaded: Found Initiative header, replacing with AP");
+      header.textContent = "AP";
+      break;
+    }
+  }
+  
+  // STEP 2: Update each weapon row to show AP value
+  const gearItems = htmlElement.querySelectorAll('.gear.item');
+  for (const el of gearItems) {
+    const itemId = el.dataset.itemId;
+    if (!itemId) continue;
+    
+    const item = app.actor.items.get(itemId);
+    if (item?.type === "weapon") {
+      console.log("Combat Reloaded: Processing weapon:", item.name);
+      
+      const apValue = item.system.armorPenetration || 0;
+      const rowDataElements = el.querySelectorAll('.gear-row-data');
+      
+      if (rowDataElements.length > 1) {
+        // The Initiative column should be the 2nd column (index 1)
+        const initiativeColumn = rowDataElements[1];
+        initiativeColumn.innerHTML = `<span class="ap-value-display">${apValue}</span>`;
+        
+        console.log("Combat Reloaded: Set AP value", apValue, "for weapon", item.name);
+      }
+    }
+  }
+}
+
 
 // Function to add AP to chat messages
 function addAPToChatMessage(message, html) {
