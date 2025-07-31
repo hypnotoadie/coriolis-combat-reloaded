@@ -107,7 +107,7 @@ function addAPToChatMessage(message, html) {
   
   if (!isWeaponRoll) return;
   
-  // Check if AP is already displayed
+  // Check if AP is already displayed (using vanilla JS instead of jQuery)
   if (html.querySelector('.ap-chat-value')) return;
   
   // Get AP value from roll data or actor
@@ -128,17 +128,10 @@ function addAPToChatMessage(message, html) {
     }
   }
   
-  // Find where to insert AP (after damage row) - convert to vanilla JS
-  let damageRow = null;
-  
-  // Look for a table row containing "Damage:"
-  const allRows = html.querySelectorAll('tr');
-  for (const row of allRows) {
-    if (row.textContent.includes('Damage:')) {
-      damageRow = row;
-      break;
-    }
-  }
+  // Find where to insert AP (after damage row) - using vanilla JS
+  const damageRow = html.querySelector('tr:has(td:contains("Damage:"))') || 
+                   Array.from(html.querySelectorAll('tr')).find(row => 
+                     row.textContent.includes('Damage:'));
   
   if (damageRow) {
     const apRow = document.createElement('tr');
@@ -286,6 +279,7 @@ function addAPFieldToWeaponSheet(app, html) {
   }
 }
 
+
 // Updated to remove jQuery dependency
 // Function to replace Armor Rating with Damage Reduction on armor sheets
 function replaceARWithDROnArmorSheet(app, html) {
@@ -361,50 +355,58 @@ function replaceARWithDROnArmorSheet(app, html) {
   }
 }
 
-function modifyArmorDisplayOnActorSheet(app, html) {
-  console.log("Combat Reloaded: Modifying armor display on actor sheet");
+// Updated to remove jQuery dependency
+// Function to modify armor display on actor sheets
+function modifyWeaponDisplayOnActorSheet(app, html) {
+  console.log("Combat Reloaded: Modifying actor sheet weapon display");
   
-  // Handle both jQuery and HTMLElement
-  const htmlElement = html.jquery ? html[0] : html;
+  // Convert html to HTMLElement if it's jQuery
+  const htmlElement = html instanceof HTMLElement ? html : html[0];
   
-  // STEP 1: Replace "Armor Rating" header with "Damage Reduction"
-  const armorHeaders = htmlElement.querySelectorAll('.gear-category-name');
-  for (const header of armorHeaders) {
-    const headerText = header.textContent.trim();
-    if (headerText.includes("Armor Rating") || headerText === "Rating") {
-      console.log("Combat Reloaded: Found Armor Rating header, replacing with Damage Reduction");
-      header.textContent = "Damage Reduction";
+  // STEP 1: Replace "Initiative" with "AP" in the weapons header
+  const weaponsHeaders = htmlElement.querySelectorAll('.gear-category-header .gear-category-name');
+  for (const header of weaponsHeaders) {
+    if (header.textContent.trim() === "Initiative") {
+      console.log("Combat Reloaded: Found Initiative header, replacing with AP");
+      header.textContent = "AP";
       break;
     }
   }
   
-  // STEP 2: Update armor item values  
+  // STEP 2: Update each weapon row to show AP value
   const gearItems = htmlElement.querySelectorAll('.gear.item');
   for (const el of gearItems) {
     const itemId = el.dataset.itemId;
     if (!itemId) continue;
     
     const item = app.actor.items.get(itemId);
-    if (item?.type === "armor") {
-      const armorRatingDisplay = el.querySelector('.gear-row-data');
-      if (armorRatingDisplay) {
-        const drValue = item.system.damageReduction || item.system.armorRating || 0;
-        armorRatingDisplay.innerHTML = `<span class="dr-value">${drValue}</span>`;
-        console.log("Combat Reloaded: Set DR value", drValue, "for armor", item.name);
+    if (item?.type === "weapon") {
+      console.log("Combat Reloaded: Processing weapon:", item.name);
+      
+      const apValue = item.system.armorPenetration || 0;
+      const rowDataElements = el.querySelectorAll('.gear-row-data');
+      
+      if (rowDataElements.length > 1) {
+        // The Initiative column should be the 2nd column (index 1)
+        const initiativeColumn = rowDataElements[1];
+        initiativeColumn.innerHTML = `<span class="ap-value-display">${apValue}</span>`;
+        
+        console.log("Combat Reloaded: Set AP value", apValue, "for weapon", item.name);
       }
     }
   }
 }
+
 
 // Updated to remove jQuery dependency
 // Function to modify weapon display on actor sheets
 function modifyWeaponDisplayOnActorSheet(app, html) {
   console.log("Combat Reloaded: Modifying actor sheet weapon display");
   
-  // Handle both jQuery and HTMLElement
-  const htmlElement = html.jquery ? html[0] : html;
+  // Convert html to HTMLElement if it's jQuery
+  const htmlElement = html instanceof HTMLElement ? html : html[0];
   
-  // STEP 1: Replace "Initiative" with "AP" in the weapons header  
+  // STEP 1: Replace "Initiative" with "AP" in the weapons header
   const weaponsHeaders = htmlElement.querySelectorAll('.gear-category-header .gear-category-name');
   for (const header of weaponsHeaders) {
     if (header.textContent.trim() === "Initiative") {
