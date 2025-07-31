@@ -1,9 +1,9 @@
-// Coriolis Combat Reloaded - main.js (Updated for Foundry v13)
+// Coriolis Combat Reloaded - Simplified and Stable Approach
+// This module adds Armor Penetration to weapons and Damage Reduction to armor
 
-// Constants
 const MODULE_ID = "coriolis-combat-reloaded";
 
-// Register module settings
+// Initialize the module
 Hooks.once("init", () => {
   console.log("Coriolis Combat Reloaded | Initializing");
   
@@ -15,345 +15,42 @@ Hooks.once("init", () => {
     config: true,
     type: Boolean,
     default: true,
-    onChange: _ => window.location.reload()
+    onChange: () => window.location.reload()
   });
 });
 
-// This is our main hook for implementing changes
+// Main module setup
 Hooks.once("ready", function() {
-  // Make sure Combat Reloaded is enabled
   if (!game.settings.get(MODULE_ID, "enableCombatReloaded")) return;
   
   console.log("Coriolis Combat Reloaded | Module Ready");
   
-  // Initialize the module
+  // Initialize existing items
   initializeItemFields();
-  setupChatObserver();
+  
+  // Show activation message
   ui.notifications.info(game.i18n.localize("coriolis-combat-reloaded.messages.moduleActive"));
 });
 
-// Initialize item fields for existing items
+// Initialize AP/DR fields for existing items
 function initializeItemFields() {
-  // Add armorPenetration to weapons that don't have it
+  // Initialize weapons with AP field
   game.items.filter(i => i.type === "weapon").forEach(item => {
     if (item.system.armorPenetration === undefined) {
-      console.log(`Initializing AP field for weapon ${item.name}`);
       item.update({"system.armorPenetration": 0});
     }
   });
   
-  // Add damageReduction to armor that don't have it
+  // Initialize armor with DR field
   game.items.filter(i => i.type === "armor").forEach(item => {
     if (item.system.damageReduction === undefined) {
       const arValue = item.system.armorRating || 0;
-      console.log(`Initializing DR field for armor ${item.name} with value ${arValue}`);
       item.update({"system.damageReduction": arValue});
     }
   });
 }
 
-// Setup Observer for Chat Messages - Updated for v13
-function setupChatObserver() {
-  // Use native DOM methods instead of jQuery for better v13 compatibility
-  const chatLog = document.getElementById("chat-log");
-  if (chatLog) {
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.type === 'childList' && mutation.addedNodes.length) {
-          mutation.addedNodes.forEach((node) => {
-            if (node.nodeType === Node.ELEMENT_NODE && 
-                node.classList.contains('message') && 
-                node.dataset.messageId) {
-              
-              // Process the new chat message
-              processNewChatMessage(node);
-            }
-          });
-        }
-      });
-    });
-    
-    // Start observing
-    observer.observe(chatLog, { childList: true, subtree: false });
-    console.log("Added observer for chat messages");
-  }
-}
-
-// Process a new chat message - Updated for v13
-function processNewChatMessage(messageNode) {
-  // Get the message ID
-  const messageId = messageNode.dataset.messageId;
-  const message = game.messages.get(messageId);
-  
-  // Skip if not a valid message
-  if (!message) return;
-  
-  // Check if it's a weapon roll using native DOM methods where possible
-  const hasRoll = messageNode.querySelector('.dice-roll') !== null;
-  const isWeaponRoll = hasRoll && (
-    messageNode.textContent.includes("Weapon") ||
-    message.flags?.yzecoriolis?.results?.rollData?.rollType === "weapon"
-  );
-  
-  if (isWeaponRoll) {
-    addAPToWeaponRoll(messageNode, message);
-  }
-  
-  // Also check for item cards
-  const itemCard = messageNode.querySelector(".item-card");
-  if (itemCard) {
-    processItemCard(itemCard, messageNode);
-  }
-}
-
-// Add AP to weapon roll - Refactored for better DOM handling
-function addAPToWeaponRoll(messageNode, message) {
-  let apValue = 0;
-  
-  // Try to get from actor
-  if (message.speaker.actor) {
-    const actor = game.actors.get(message.speaker.actor);
-    if (actor) {
-      let weaponName = "";
-      
-      // Try from roll data
-      if (message.flags?.yzecoriolis?.results?.rollData?.rollTitle) {
-        weaponName = message.flags.yzecoriolis.results.rollData.rollTitle;
-      }
-      
-      // Try from message content using native DOM
-      if (!weaponName) {
-        const titleElement = messageNode.querySelector('h2.roll-name');
-        if (titleElement) {
-          weaponName = titleElement.textContent.split('\n')[0].trim();
-        }
-      }
-      
-      // Find the weapon
-      if (weaponName) {
-        const weapon = actor.items.find(i => 
-          i.type === "weapon" && 
-          i.name === weaponName
-        );
-        
-        if (weapon && weapon.system.armorPenetration !== undefined) {
-          apValue = weapon.system.armorPenetration;
-          console.log(`Found AP ${apValue} for weapon ${weaponName}`);
-        }
-      }
-    }
-  }
-  
-  // Find damage row and add AP
-  const damageRow = messageNode.querySelector('tr td:first-child');
-  if (damageRow && damageRow.textContent.includes("Damage:") && 
-      !messageNode.querySelector('.ap-value')) {
-    
-    // Create AP row
-    const apRow = document.createElement('tr');
-    apRow.innerHTML = `
-      <td>AP:</td>
-      <td><span class="ap-value">${apValue}</span></td>
-    `;
-    
-    // Insert after damage row
-    damageRow.closest('tr').insertAdjacentElement('afterend', apRow);
-  }
-}
-
-// Process item card - Updated for v13
-function processItemCard(itemCard, messageNode) {
-  const itemId = itemCard.dataset.itemId;
-  const actorId = itemCard.dataset.actorId;
-  
-  if (itemId && actorId) {
-    const actor = game.actors.get(actorId);
-    if (actor) {
-      const item = actor.items.get(itemId);
-      if (item) {
-        if (item.type === "weapon") {
-          addAPToWeaponItemCard(item, messageNode);
-        } else if (item.type === "armor") {
-          replaceDROnArmorItemCard(item, messageNode);
-        }
-      }
-    }
-  }
-}
-
-// Hook into item sheet rendering - Updated hook name for v13 compatibility
-Hooks.on("renderItemSheet", (app, html, data) => {
-  // Check if this is a yzecoriolis item sheet
-  if (!app.constructor.name.includes("yzecoriolis") || 
-      !game.settings.get(MODULE_ID, "enableCombatReloaded")) return;
-  
-  // If this is a weapon sheet, add AP field
-  if (app.item.type === "weapon") {
-    addAPFieldToWeaponSheet(app, html, data);
-  }
-  
-  // If this is an armor sheet, replace AR with DR
-  if (app.item.type === "armor") {
-    replaceARWithDROnArmorSheet(app, html, data);
-  }
-});
-
-// Add AP field to weapon sheet - Updated for better DOM handling
-function addAPFieldToWeaponSheet(app, html, data) {
-  // Convert jQuery object to DOM element if needed
-  const htmlElement = html[0] || html;
-  
-  // Check if already processed
-  if (htmlElement.dataset.apProcessed) {
-    console.log("AP field already processed, skipping");
-    return;
-  }
-  
-  // Mark as processed
-  htmlElement.dataset.apProcessed = "true";
-  
-  // Get current AP value
-  let apValue = app.item.system.armorPenetration;
-  if (apValue === undefined || apValue === null || isNaN(apValue)) {
-    apValue = 0;
-    app.item.update({"system.armorPenetration": 0});
-  }
-  
-  // Find insertion point using native DOM where possible
-  const damageLabel = Array.from(htmlElement.querySelectorAll('.resource-label'))
-    .find(label => label.textContent.includes("Damage"));
-  const damageField = damageLabel?.closest('.resource');
-  
-  if (damageField) {
-    // Create AP field
-    const apFieldHTML = `
-      <div class="resource numeric-input flexrow ap-field" id="ap-field-${app.item.id}">
-        <label class="resource-label">${game.i18n.localize("coriolis-combat-reloaded.labels.armorPenetration")}</label>
-        <input type="number" name="system.armorPenetration" value="${apValue}" data-dtype="Number">
-      </div>
-    `;
-    
-    // Insert after damage field
-    damageField.insertAdjacentHTML('afterend', apFieldHTML);
-    
-    // Add event handler
-    const apInput = htmlElement.querySelector(`#ap-field-${app.item.id} input`);
-    if (apInput) {
-      apInput.addEventListener('change', function() {
-        const val = Number(this.value) || 0;
-        app.item.update({"system.armorPenetration": val});
-        console.log(`Updated AP value to ${val} for item ${app.item.name}`);
-      });
-    }
-  }
-}
-
-// Replace AR with DR on armor sheet - Updated for v13
-function replaceARWithDROnArmorSheet(app, html, data) {
-  const htmlElement = html[0] || html;
-  
-  if (htmlElement.dataset.drProcessed) {
-    return;
-  }
-  
-  htmlElement.dataset.drProcessed = "true";
-  
-  const armorRating = app.item.system.armorRating || 0;
-  let damageReduction = app.item.system.damageReduction;
-  
-  if (damageReduction === undefined || damageReduction === null || isNaN(damageReduction)) {
-    damageReduction = armorRating;
-    app.item.update({"system.damageReduction": armorRating});
-  }
-  
-  // Find armor rating field
-  const arLabel = Array.from(htmlElement.querySelectorAll('.resource-label'))
-    .find(label => label.textContent.includes("Armor Rating"));
-  const arField = arLabel?.closest('.resource');
-  
-  if (arField) {
-    // Update label
-    arLabel.textContent = game.i18n.localize("coriolis-combat-reloaded.labels.damageReduction");
-    
-    // Update input
-    const arInput = arField.querySelector('input');
-    if (arInput) {
-      const originalName = arInput.name;
-      
-      // Create hidden input for original field
-      const hiddenInput = document.createElement('input');
-      hiddenInput.type = 'hidden';
-      hiddenInput.name = originalName;
-      hiddenInput.value = armorRating;
-      arField.appendChild(hiddenInput);
-      
-      // Update visible input
-      arInput.name = 'system.damageReduction';
-      arInput.value = damageReduction;
-      
-      arInput.addEventListener('change', function() {
-        const val = Number(this.value) || 0;
-        app.item.update({
-          "system.damageReduction": val,
-          "system.armorRating": val
-        });
-        hiddenInput.value = val;
-      });
-    }
-  }
-}
-
-// Add AP to weapon item card - Updated for v13
-function addAPToWeaponItemCard(weapon, messageNode) {
-  if (messageNode.querySelector('.card-ap')) return;
-  
-  const apValue = weapon.system.armorPenetration || 0;
-  const damageElement = messageNode.querySelector(".card-damage");
-  
-  if (damageElement) {
-    const apElement = document.createElement('div');
-    apElement.className = 'card-ap';
-    apElement.innerHTML = `
-      <span class="label">${game.i18n.localize("coriolis-combat-reloaded.labels.ap")}:</span>
-      <span class="value">${apValue}</span>
-    `;
-    
-    damageElement.insertAdjacentElement('afterend', apElement);
-  }
-}
-
-// Replace AR with DR on armor item card - Updated for v13
-function replaceDROnArmorItemCard(armor, messageNode) {
-  if (messageNode.querySelector('.card-damage-reduction')) return;
-  
-  const armorRating = armor.system.armorRating || 0;
-  const damageReduction = armor.system.damageReduction !== undefined ? 
-                         armor.system.damageReduction : armorRating;
-  
-  const arElement = messageNode.querySelector(".card-armor-rating");
-  
-  if (arElement) {
-    const labelElement = arElement.querySelector(".label");
-    const valueElement = arElement.querySelector(".value");
-    
-    if (labelElement) labelElement.textContent = game.i18n.localize("coriolis-combat-reloaded.labels.dr") + ":";
-    if (valueElement) valueElement.textContent = damageReduction;
-    
-    arElement.classList.remove("card-armor-rating");
-    arElement.classList.add("card-damage-reduction");
-  }
-}
-
-// Handle chat message rendering - Updated for v13
-Hooks.on("renderChatMessage", (message, html, data) => {
-  if (!game.settings.get(MODULE_ID, "enableCombatReloaded")) return;
-  
-  // html is now consistently a jQuery object in v13, but we convert to DOM element
-  const htmlElement = html[0] || html;
-  processNewChatMessage(htmlElement);
-});
-
-// Handle item creation - Updated for v13
+// Hook: When new items are created, initialize custom fields
 Hooks.on("createItem", (item, options, userId) => {
   if (!game.settings.get(MODULE_ID, "enableCombatReloaded")) return;
   if (game.user.id !== userId) return;
@@ -368,16 +65,185 @@ Hooks.on("createItem", (item, options, userId) => {
   }
 });
 
-// Handle pre-creation - Updated for v13
-Hooks.on("preCreateItem", (item, data, options, userId) => {
+// Hook: Modify weapon item sheets to include AP field
+Hooks.on("renderyzecoriolisItemSheet", (app, html, data) => {
   if (!game.settings.get(MODULE_ID, "enableCombatReloaded")) return;
   
-  if (data.type === "weapon" && !data.system?.armorPenetration) {
-    item.updateSource({"system.armorPenetration": 0});
+  if (app.item.type === "weapon") {
+    addAPFieldToWeaponSheet(app, html);
   }
   
-  if (data.type === "armor" && !data.system?.damageReduction) {
-    const armorRating = data.system?.armorRating || 0;
-    item.updateSource({"system.damageReduction": armorRating});
+  if (app.item.type === "armor") {
+    replaceARWithDROnArmorSheet(app, html);
   }
 });
+
+// Hook: Modify actor sheets to show DR and AP values
+Hooks.on("renderyzecoriolisActorSheet", (app, html, data) => {
+  if (!game.settings.get(MODULE_ID, "enableCombatReloaded")) return;
+  
+  // Update armor display to show DR instead of AR
+  modifyArmorDisplayOnActorSheet(app, html);
+  
+  // Update weapon display to show AP
+  modifyWeaponDisplayOnActorSheet(app, html);
+});
+
+// Hook: Add AP to weapon roll chat messages
+Hooks.on("renderChatMessage", (message, html, data) => {
+  if (!game.settings.get(MODULE_ID, "enableCombatReloaded")) return;
+  
+  addAPToChatMessage(message, html);
+});
+
+// Function to add AP field to weapon item sheets
+function addAPFieldToWeaponSheet(app, html) {
+  // Prevent duplicate processing
+  if (html.data('ap-processed')) return;
+  html.data('ap-processed', true);
+  
+  // Get current AP value
+  let apValue = app.item.system.armorPenetration;
+  if (apValue === undefined || apValue === null || isNaN(apValue)) {
+    apValue = 0;
+    app.item.update({"system.armorPenetration": 0});
+  }
+  
+  // Find where to insert the AP field (after damage field)
+  const damageField = html.find('.resource-label:contains("Damage")').closest('.resource');
+  
+  if (damageField.length) {
+    const apFieldHTML = `
+      <div class="resource numeric-input flexrow ap-field">
+        <label class="resource-label">${game.i18n.localize("coriolis-combat-reloaded.labels.armorPenetration")}</label>
+        <input type="number" name="system.armorPenetration" value="${apValue}" data-dtype="Number" min="0">
+      </div>
+    `;
+    
+    $(apFieldHTML).insertAfter(damageField);
+    
+    // Add change handler
+    html.find('input[name="system.armorPenetration"]').change(function() {
+      const val = Number($(this).val()) || 0;
+      app.item.update({"system.armorPenetration": val});
+    });
+  }
+}
+
+// Function to replace AR with DR on armor item sheets
+function replaceARWithDROnArmorSheet(app, html) {
+  // Prevent duplicate processing
+  if (html.data('dr-processed')) return;
+  html.data('dr-processed', true);
+  
+  // Get current values
+  const armorRating = app.item.system.armorRating || 0;
+  let damageReduction = app.item.system.damageReduction;
+  
+  if (damageReduction === undefined || damageReduction === null || isNaN(damageReduction)) {
+    damageReduction = armorRating;
+    app.item.update({"system.damageReduction": damageReduction});
+  }
+  
+  // Find and modify the armor rating field
+  const armorRatingField = html.find('.resource-label:contains("Armor Rating")').closest('.resource');
+  
+  if (armorRatingField.length) {
+    // Change the label
+    armorRatingField.find('.resource-label').text(
+      game.i18n.localize("coriolis-combat-reloaded.labels.damageReduction")
+    );
+    
+    // Update the input to use DR
+    const input = armorRatingField.find('input');
+    input.attr('name', 'system.damageReduction');
+    input.val(damageReduction);
+    
+    // Add change handler
+    input.change(function() {
+      const val = Number($(this).val()) || 0;
+      app.item.update({"system.damageReduction": val});
+      // Keep AR in sync for compatibility
+      app.item.update({"system.armorRating": val});
+    });
+  }
+}
+
+// Function to modify armor display on actor sheets
+function modifyArmorDisplayOnActorSheet(app, html) {
+  html.find('.gear.item').each((i, el) => {
+    const itemId = el.dataset.itemId;
+    if (!itemId) return;
+    
+    const item = app.actor.items.get(itemId);
+    if (item?.type === "armor") {
+      // Replace armor rating display with DR
+      const armorRatingDisplay = $(el).find('.gear-row-data').first();
+      if (armorRatingDisplay.length) {
+        const drValue = item.system.damageReduction || item.system.armorRating || 0;
+        armorRatingDisplay.html(`<span class="dr-value">${drValue}</span>`);
+      }
+    }
+  });
+}
+
+// Function to modify weapon display on actor sheets
+function modifyWeaponDisplayOnActorSheet(app, html) {
+  html.find('.gear.item').each((i, el) => {
+    const itemId = el.dataset.itemId;
+    if (!itemId) return;
+    
+    const item = app.actor.items.get(itemId);
+    if (item?.type === "weapon") {
+      // Add AP display to weapon name
+      const weaponName = $(el).find('.gear-name');
+      if (weaponName.length && !weaponName.find('.ap-indicator').length) {
+        const apValue = item.system.armorPenetration || 0;
+        weaponName.append(`<span class="ap-indicator"> (AP:${apValue})</span>`);
+      }
+    }
+  });
+}
+
+// Function to add AP to chat messages
+function addAPToChatMessage(message, html) {
+  // Check if this is a weapon roll
+  const isWeaponRoll = message.flags?.yzecoriolis?.results?.rollData?.rollType === "weapon";
+  
+  if (!isWeaponRoll) return;
+  
+  // Check if AP is already displayed
+  if (html.find('.ap-chat-value').length > 0) return;
+  
+  // Get AP value from roll data or actor
+  let apValue = 0;
+  const rollData = message.flags.yzecoriolis.results.rollData;
+  
+  if (rollData.armorPenetration !== undefined) {
+    apValue = rollData.armorPenetration;
+  } else if (message.speaker.actor) {
+    // Try to get from actor's weapon
+    const actor = game.actors.get(message.speaker.actor);
+    if (actor) {
+      const weaponName = rollData.rollTitle;
+      const weapon = actor.items.find(i => i.type === "weapon" && i.name === weaponName);
+      if (weapon) {
+        apValue = weapon.system.armorPenetration || 0;
+      }
+    }
+  }
+  
+  // Find where to insert AP (after damage row)
+  const damageRow = html.find('tr:contains("Damage:")');
+  if (damageRow.length) {
+    const apRow = `
+      <tr>
+        <td colspan="2">
+          ${game.i18n.localize("coriolis-combat-reloaded.labels.armorPenetration")}: 
+          <span class="ap-chat-value">${apValue}</span>
+        </td>
+      </tr>
+    `;
+    $(apRow).insertAfter(damageRow);
+  }
+}
