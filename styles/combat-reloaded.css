@@ -1,116 +1,70 @@
-/* combat-reloaded.css */
+/* Coriolis Combat Reloaded Styles */
 
-/* Common styling for AP and DR elements */
-.ap-value, .dr-value {
+/* Common styling for AP and DR values */
+.ap-value, .dr-value, .ap-chat-value {
   font-weight: bold;
-  padding: 0 3px;
+  padding: 2px 6px;
   border-radius: 3px;
   display: inline-block;
   margin: 0 2px;
+  font-size: 12px;
 }
 
 /* Armor Penetration styling */
-.ap-value {
+.ap-value, .ap-chat-value {
   color: #ffdddd;
-  background-color: rgba(180, 30, 30, 0.7);
+  background-color: rgba(180, 30, 30, 0.8);
   border: 1px solid #990000;
 }
 
 /* Damage Reduction styling */
 .dr-value {
   color: #ddffdd;
-  background-color: rgba(30, 130, 30, 0.7);
+  background-color: rgba(30, 130, 30, 0.8);
   border: 1px solid #006600;
 }
 
-/* Make the AP field match other resource flexrow inputs */
-.resource.ap-field {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
-  align-items: center;
+/* AP indicator on weapon names */
+.ap-indicator {
+  font-size: 11px;
+  color: #ffdddd;
+  font-weight: normal;
 }
 
-.resource.ap-field input {
-  height: 24px;
-  flex: 0 0 60px;
-  margin-left: 8px;
+/* AP field styling on item sheets */
+.ap-field {
+  margin: 5px 0;
 }
 
-/* Make the AP field label match other labels */
-.resource.ap-field .resource-label {
+.ap-field .resource-label {
   flex: 1;
-  margin: 0;
   font-weight: bold;
   font-size: 13px;
 }
 
-/* Ensure we don't see duplicate fields */
-input[name="system.armorPenetration"] ~ input[name="system.armorPenetration"] {
-  display: none !important;
+.ap-field input {
+  flex: 0 0 60px;
+  height: 24px;
+  margin-left: 8px;
+  text-align: center;
 }
 
-/* Hide duplicate AP fields by class as well */
+/* Prevent duplicate AP fields */
 .ap-field ~ .ap-field {
   display: none !important;
 }
 
-/* Styling for armor card elements */
-.card-damage-reduction {
-  margin: 3px 0;
+/* Chat message AP styling */
+.dice-roll .ap-chat-value {
+  font-family: inherit;
+  font-size: 14px;
 }
 
-.card-damage-reduction .label {
-  font-weight: bold;
-  margin-right: 5px;
-}
-
-/* Styling for weapon card elements */
-.card-ap {
-  margin: 3px 0;
-}
-
-.card-ap .label {
-  font-weight: bold;
-  margin-right: 5px;
-}
-
-/* Chat card styling */
-.dice-roll tr .ap-value {
-  display: inline-block;
-  padding: 2px 5px;
-  margin: 0 2px;
-}
-
-/* Combat roll modifications in chat */
-.dice-roll .combat-stats {
-  margin: 5px 0;
-  padding: 5px;
-  border: 1px solid #4b4a44;
-  border-radius: 5px;
-  background: rgba(0, 0, 0, 0.1);
-}
-
-/* Make AP and DR values stand out more in chat */
-.chat-message .ap-value, 
-.chat-message .dr-value {
-  font-size: 110%;
-}
-
-/* Make sure AP appears in the same format as other values in chat */
-.dice-roll tr td .ap-value {
-  font-family: "Roboto", sans-serif;
-  background-color: rgba(180, 30, 30, 0.7);
-  border: 1px solid #990000;
-  border-radius: 3px;
-  padding: 2px 5px;
-  margin: 0 2px;
-  display: inline-block;
-}
-
-/* Format the DR field properly in armor sheets */
-input#dr-field {
-  width: 60px;
-  flex: 0 0 60px;
-  height: 24px;
+/* Make sure DR values in gear lists are visible */
+.yzecoriolis.sheet.actor .dr-value {
+  background-color: rgba(30, 130, 30, 0.6);
+  color: #ffffff;
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-size: 12px;
 }
