@@ -102,11 +102,24 @@ function addAPFieldToWeaponSheet(app, html) {
   if (html.data('ap-processed')) return;
   html.data('ap-processed', true);
   
-  // Get current AP value
+  // Get current AP value - be more careful about validation
   let apValue = app.item.system.armorPenetration;
-  if (apValue === undefined || apValue === null || isNaN(apValue)) {
+  
+  // Only initialize if the value is truly undefined or null
+  // Don't treat 0 or string numbers as invalid
+  if (apValue === undefined || apValue === null) {
     apValue = 0;
     app.item.update({"system.armorPenetration": 0});
+  } else {
+    // Convert to number, but don't assume it's invalid if it's already valid
+    const numValue = Number(apValue);
+    if (isNaN(numValue)) {
+      // Only reset if the conversion actually failed
+      apValue = 0;
+      app.item.update({"system.armorPenetration": 0});
+    } else {
+      apValue = numValue;
+    }
   }
   
   // Find where to insert the AP field (after damage field)
@@ -122,10 +135,34 @@ function addAPFieldToWeaponSheet(app, html) {
     
     $(apFieldHTML).insertAfter(damageField);
     
-    // Add change handler
-    html.find('input[name="system.armorPenetration"]').change(function() {
-      const val = Number($(this).val()) || 0;
-      app.item.update({"system.armorPenetration": val});
+    // Add change handler - be more careful about when to reset
+    html.find('input[name="system.armorPenetration"]').on('change blur', function() {
+      const val = $(this).val();
+      
+      console.log("Combat Reloaded: AP field changed to:", val, "Type:", typeof val);
+      
+      // Handle empty string
+      if (val === "") {
+        $(this).val(0);
+        app.item.update({"system.armorPenetration": 0});
+        return;
+      }
+      
+      // Convert to number
+      const numVal = Number(val);
+      
+      // Only reset if conversion actually failed
+      if (isNaN(numVal)) {
+        console.log("Combat Reloaded: Invalid number, resetting to 0");
+        $(this).val(0);
+        app.item.update({"system.armorPenetration": 0});
+      } else {
+        // Valid number - ensure it's non-negative
+        const finalVal = Math.max(0, numVal);
+        console.log("Combat Reloaded: Valid number, updating to:", finalVal);
+        $(this).val(finalVal);
+        app.item.update({"system.armorPenetration": finalVal});
+      }
     });
   }
 }
@@ -140,9 +177,21 @@ function replaceARWithDROnArmorSheet(app, html) {
   const armorRating = app.item.system.armorRating || 0;
   let damageReduction = app.item.system.damageReduction;
   
-  if (damageReduction === undefined || damageReduction === null || isNaN(damageReduction)) {
+  // Only initialize DR if it's truly undefined or null
+  // Don't treat 0 or string numbers as invalid
+  if (damageReduction === undefined || damageReduction === null) {
     damageReduction = armorRating;
     app.item.update({"system.damageReduction": damageReduction});
+  } else {
+    // Convert to number, but don't assume it's invalid if conversion works
+    const numValue = Number(damageReduction);
+    if (isNaN(numValue)) {
+      // Only reset if the conversion actually failed
+      damageReduction = armorRating;
+      app.item.update({"system.damageReduction": damageReduction});
+    } else {
+      damageReduction = numValue;
+    }
   }
   
   // Find and modify the armor rating field
@@ -159,12 +208,38 @@ function replaceARWithDROnArmorSheet(app, html) {
     input.attr('name', 'system.damageReduction');
     input.val(damageReduction);
     
-    // Add change handler
-    input.change(function() {
-      const val = Number($(this).val()) || 0;
-      app.item.update({"system.damageReduction": val});
-      // Keep AR in sync for compatibility
-      app.item.update({"system.armorRating": val});
+    // Add change handler with proper validation
+    input.on('change blur', function() {
+      const val = $(this).val();
+      
+      console.log("Combat Reloaded: DR field changed to:", val, "Type:", typeof val);
+      
+      // Handle empty string
+      if (val === "") {
+        $(this).val(0);
+        app.item.update({"system.damageReduction": 0});
+        app.item.update({"system.armorRating": 0});
+        return;
+      }
+      
+      // Convert to number
+      const numVal = Number(val);
+      
+      // Only reset if conversion actually failed
+      if (isNaN(numVal)) {
+        console.log("Combat Reloaded: Invalid DR number, resetting to 0");
+        $(this).val(0);
+        app.item.update({"system.damageReduction": 0});
+        app.item.update({"system.armorRating": 0});
+      } else {
+        // Valid number - ensure it's non-negative
+        const finalVal = Math.max(0, numVal);
+        console.log("Combat Reloaded: Valid DR number, updating to:", finalVal);
+        $(this).val(finalVal);
+        app.item.update({"system.damageReduction": finalVal});
+        // Keep AR in sync for compatibility
+        app.item.update({"system.armorRating": finalVal});
+      }
     });
   }
 }
