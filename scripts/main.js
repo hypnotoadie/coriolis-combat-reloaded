@@ -359,51 +359,42 @@ function modifyArmorDisplayOnActorSheet(app, html) {
 // Debug version to understand the actor sheet structure
 function modifyWeaponDisplayOnActorSheet(app, html) {
   console.log("Combat Reloaded: === DEBUGGING ACTOR SHEET STRUCTURE ===");
-  
-  // Find the weapons section
-  const weaponsHeader = html.find('.gear-category-name:contains("Weapons")').closest('.gear-category-header');
-  if (weaponsHeader.length) {
-    console.log("Combat Reloaded: Found weapons header");
-    
-    // Log all the header columns
-    const headerColumns = weaponsHeader.find('.gear-category-name');
-    console.log("Combat Reloaded: Header has", headerColumns.length, "columns:");
-    headerColumns.each((i, col) => {
-      console.log("Combat Reloaded: Header column", i, ":", $(col).text().trim());
-    });
-    
-    // Replace Initiative with AP
-    const initiativeHeader = headerColumns.filter(':contains("Initiative")');
+
+  // Find the weapons and explosives section headers
+  const headersToModify = html.find('.gear-category-name:contains("Weapons"), .gear-category-name:contains("Explosives")').closest('.gear-category-header');
+
+  headersToModify.each(function() {
+    const header = $(this);
+    const categoryName = header.find('.gear-category-name').text().trim();
+    console.log(`Combat Reloaded: Found ${categoryName} header`);
+
+    // Replace Initiative with AP in the header
+    const initiativeHeader = header.find('.gear-category-name:contains("Initiative")');
     if (initiativeHeader.length) {
-      console.log("Combat Reloaded: Replacing Initiative header with AP");
+      console.log(`Combat Reloaded: Replacing Initiative header with AP for ${categoryName}`);
       initiativeHeader.text("AP");
     }
-  }
-  
-  // Find and analyze weapon rows
+  });
+
+
+  // Find and analyze weapon and explosive rows
   html.find('.gear.item').each((i, el) => {
     const itemId = el.dataset.itemId;
     if (!itemId) return;
-    
+
     const item = app.actor.items.get(itemId);
-    if (item?.type === "weapon") {
-      console.log("Combat Reloaded: === WEAPON ROW DEBUG ===");
-      console.log("Combat Reloaded: Weapon:", item.name);
+    if (item?.type === "weapon" || item?.type === "explosive") {
+      console.log("Combat Reloaded: === WEAPON/EXPLOSIVE ROW DEBUG ===");
+      console.log("Combat Reloaded: Item:", item.name);
       console.log("Combat Reloaded: AP Value:", item.system.armorPenetration || 0);
-      
+
       // Log the structure of this weapon row
       const gearBg = $(el).find('.gear-bg');
-      console.log("Combat Reloaded: Gear-bg elements:", gearBg.length);
-      
       const rowData = gearBg.find('.gear-row-data');
+      
       console.log("Combat Reloaded: Row data elements:", rowData.length);
-      
-      rowData.each((index, column) => {
-        const columnText = $(column).text().trim();
-        const columnHtml = $(column).html();
-        console.log("Combat Reloaded: Column", index, "text:", columnText, "html:", columnHtml);
-      });
-      
+
+
       // Try to replace the initiative column (assuming it's index 1)
       if (rowData.length > 1) {
         const apValue = item.system.armorPenetration || 0;
@@ -413,11 +404,11 @@ function modifyWeaponDisplayOnActorSheet(app, html) {
         targetColumn.html(`<span class="ap-value-display">${apValue}</span>`);
         targetColumn.addClass('ap-column');
       }
-      
-      console.log("Combat Reloaded: === END WEAPON ROW DEBUG ===");
+
+      console.log("Combat Reloaded: === END WEAPON/EXPLOSIVE ROW DEBUG ===");
     }
   });
-  
+
   console.log("Combat Reloaded: === END ACTOR SHEET STRUCTURE DEBUG ===");
 }
 
