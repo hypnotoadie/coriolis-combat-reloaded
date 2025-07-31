@@ -41,5 +41,5 @@
   },
   "url": "https://github.com/yourusername/coriolis-combat-reloaded",
   "manifest": "https://raw.githubusercontent.com/yourusername/coriolis-combat-reloaded/main/module.json",
-  "download": "https://github.com/yourusername/coriolis-combat-reloaded/archive/0.3.1.zip"
+  "download": "https://github.com/yourusername/coriolis-combat-reloaded/releases/download/v0.3.1/coriolis-combat-reloaded.zip"
 }
