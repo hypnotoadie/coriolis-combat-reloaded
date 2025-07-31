@@ -2,7 +2,7 @@
   "id": "coriolis-combat-reloaded",
   "title": "Coriolis: Combat Reloaded",
   "description": "Enhances the Coriolis combat system by replacing Armor Rating with Armor Penetration (AP) and Damage Reduction (DR).",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "compatibility": {
     "minimum": "12",
     "verified": "13",
